@@ -19,6 +19,8 @@ args.base = 4
 args.nChannels = 16
 args.j = 16
 
+print(args)
+
 # load pre-trained model
 model = MSDNet(args=args)
 MODEL_PATH = 'models/models/save_models/checkpoint_299.pth.tar'
@@ -75,34 +77,34 @@ print((targets == max_index).sum() / len(targets))
 # plt.savefig('/home/metod/Desktop/PhD/year1/PoE/MSDNet-PyTorch/modal_probs.pdf')
 # plt.show()
 
-# # nr. of non-decreasing probability vectors in anytime-prediction regime
-# nr_non_decreasing = 0
-# diffs = []
-# for i in range(10000):
-#     probs_i = probs[:, i, max_index[i]].cpu().numpy()
-#     diffs_i = np.diff(probs_i)
-#     diffs.append(diffs_i.min())
-#     if np.all(diffs_i >= -0.1):
-#         nr_non_decreasing += 1
-# print(nr_non_decreasing)
-# print(np.mean(diffs))
-
-# deep ensembles
-assert torch.all(probs[0, 0, :] == probs.cumsum(dim=0)[0, 0, :])
-de_probs = probs.cumsum(dim=0).cpu() / torch.tensor([1., 2., 3., 4., 5., 6., 7.])[:, None, None]
-de_max_index = torch.argmax(de_probs, dim=2)[-1, :]
-# print(de_probs.shape)
-# print(de_max_index.shape)
-# print(de_probs[0, 0, :].sum())
-print((targets.cpu() == de_max_index.cpu()).sum() / len(targets))
+# nr. of non-decreasing probability vectors in anytime-prediction regime
 nr_non_decreasing = 0
 diffs = []
 for i in range(10000):
-    probs_i = de_probs[:, i, de_max_index[i]].cpu().numpy()
+    probs_i = probs[:, i, max_index[i]].cpu().numpy()
     diffs_i = np.diff(probs_i)
     diffs.append(diffs_i.min())
-    if np.all(diffs_i >= -0.05):
+    if np.all(diffs_i >= -0.1):
         nr_non_decreasing += 1
 print(nr_non_decreasing)
 print(np.mean(diffs))
+
+# # deep ensembles
+# assert torch.all(probs[0, 0, :] == probs.cumsum(dim=0)[0, 0, :])
+# de_probs = probs.cumsum(dim=0).cpu() / torch.tensor([1., 2., 3., 4., 5., 6., 7.])[:, None, None]
+# de_max_index = torch.argmax(de_probs, dim=2)[-1, :]
+# # print(de_probs.shape)
+# # print(de_max_index.shape)
+# # print(de_probs[0, 0, :].sum())
+# print((targets.cpu() == de_max_index.cpu()).sum() / len(targets))
+# nr_non_decreasing = 0
+# diffs = []
+# for i in range(10000):
+#     probs_i = de_probs[:, i, de_max_index[i]].cpu().numpy()
+#     diffs_i = np.diff(probs_i)
+#     diffs.append(diffs_i.min())
+#     if np.all(diffs_i >= -0.05):
+#         nr_non_decreasing += 1
+# print(nr_non_decreasing)
+# print(np.mean(diffs))
 

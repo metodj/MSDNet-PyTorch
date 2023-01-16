@@ -3,7 +3,7 @@ from args import arg_parser
 
 
 def parse_args():
-    args = arg_parser.parse_args()
+    args = arg_parser.parse_args(args=[])
 
     if args.gpu:
         os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
