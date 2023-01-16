@@ -105,7 +105,8 @@ def main():
         model.load_state_dict(state_dict)
 
         if args.evalmode == 'anytime':
-            validate(test_loader, model, criterion, args.num_classes, args.likelihood)
+            # TODO: step in case args.likelihood=='OVR'
+            validate(test_loader, model, criterion, args.num_classes, args.likelihood, step=1.)
         else:
             dynamic_evaluate(model, test_loader, val_loader, args)
         return
@@ -122,7 +123,8 @@ def main():
         train_loss, train_prec1, train_prec5, lr, _step = train(train_loader, model, criterion, optimizer, epoch,
                                                                 args.num_classes, args.likelihood, _step, _schedule_T)
 
-        val_loss, val_prec1, val_prec5 = validate(val_loader, model, criterion, args.num_classes, args.likelihood)
+        val_loss, val_prec1, val_prec5 = validate(val_loader, model, criterion,
+                                                  args.num_classes, args.likelihood, _step, _schedule_T)
 
         scores.append(('{}\t{:.3f}' + '\t{:.4f}' * 6)
                       .format(epoch, lr, train_loss, val_loss,
@@ -148,7 +150,7 @@ def main():
     ### Test the final model
 
     print('********** Final prediction results **********')
-    validate(test_loader, model, criterion, args.num_classes, args.likelihood)
+    validate(test_loader, model, criterion, args.num_classes, args.likelihood, _step, _schedule_T)
 
     return 
 
@@ -238,7 +240,7 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
 
     return losses.avg, top1[-1].avg, top5[-1].avg, running_lr, step
 
-def validate(val_loader, model, criterion, num_classes, likelihood):
+def validate(val_loader, model, criterion, num_classes, likelihood, step, step_func=None):
     batch_time = AverageMeter()
     losses = AverageMeter()
     data_time = AverageMeter()
@@ -267,9 +269,14 @@ def validate(val_loader, model, criterion, num_classes, likelihood):
             loss = 0.0
             for j in range(len(output)):
                 if likelihood == 'softmax':
+                    T = 1.
                     loss += criterion(output[j], target_var)
                 elif likelihood == 'OVR':
-                    loss += criterion(output[j], nn.functional.one_hot(target_var, num_classes=num_classes).float())
+                    if step_func is not None:
+                        T = step_func(step)
+                    else:
+                        T = 1.
+                    loss += criterion(T * output[j], nn.functional.one_hot(target_var, num_classes=num_classes).float())
 
             losses.update(loss.item(), input.size(0))
 
@@ -288,10 +295,11 @@ def validate(val_loader, model, criterion, num_classes, likelihood):
                       'Data {data_time.avg:.3f}\t'
                       'Loss {loss.val:.4f}\t'
                       'Acc@1 {top1.val:.4f}\t'
-                      'Acc@5 {top5.val:.4f}'.format(
+                      'Acc@5 {top5.val:.4f}\t'
+                      'T: {T}'.format(
                         i + 1, len(val_loader),
                         batch_time=batch_time, data_time=data_time,
-                        loss=losses, top1=top1[-1], top5=top5[-1]))
+                        loss=losses, top1=top1[-1], top5=top5[-1], T=T))
     for j in range(args.nBlocks):
         print(' * prec@1 {top1.avg:.3f} prec@5 {top5.avg:.3f}'.format(top1=top1[j], top5=top5[j]))
     # print(' * prec@1 {top1.avg:.3f} prec@5 {top5.avg:.3f}'.format(top1=top1[-1], top5=top5[-1]))
