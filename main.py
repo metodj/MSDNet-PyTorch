@@ -51,6 +51,7 @@ def main():
     best_prec1, best_epoch = 0.0, 0
 
     if not os.path.exists(args.save):
+        print(args.save)
         os.makedirs(args.save)
 
     if args.data.startswith('cifar'):
@@ -65,6 +66,8 @@ def main():
         
         
     model = getattr(models, args.arch)(args)
+
+    print(args)
 
     if args.arch.startswith('alexnet') or args.arch.startswith('vgg'):
         model.features = torch.nn.DataParallel(model.features)

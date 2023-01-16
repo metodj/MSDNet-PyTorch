@@ -31,12 +31,12 @@ def get_dataloaders(args):
                                         transforms.RandomHorizontalFlip(),
                                         transforms.ToTensor(),
                                         normalize
-                                      ]))
+                                      ]), download=True)
         val_set = datasets.CIFAR100(args.data_root, train=False,
                                     transform=transforms.Compose([
                                         transforms.ToTensor(),
                                         normalize
-                                    ]))
+                                    ]), download=True)
     else:
         # ImageNet
         traindir = os.path.join(args.data_root, 'train')
