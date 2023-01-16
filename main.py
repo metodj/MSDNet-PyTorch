@@ -9,12 +9,14 @@ import sys
 import math
 import time
 import shutil
+from functools import partial
 
 from dataloader import get_dataloaders
 from args import arg_parser
 from adaptive_inference import dynamic_evaluate
 import models
 from op_counter import measure_model
+from utils import schedule_T
 
 args = arg_parser.parse_args()
 
@@ -75,7 +77,12 @@ def main():
     else:
         model = torch.nn.DataParallel(model).cuda()
 
-    criterion = nn.CrossEntropyLoss().cuda()
+    if args.likelihood == 'softmax':
+        criterion = nn.CrossEntropyLoss().cuda()
+    elif args.likelihood == 'OVR':
+        criterion = nn.BCEWithLogitsLoss().cuda()
+    else:
+        raise ValueError()
 
     optimizer = torch.optim.SGD(model.parameters(), args.lr,
                                 momentum=args.momentum,
@@ -98,7 +105,7 @@ def main():
         model.load_state_dict(state_dict)
 
         if args.evalmode == 'anytime':
-            validate(test_loader, model, criterion)
+            validate(test_loader, model, criterion, args.num_classes, args.likelihood)
         else:
             dynamic_evaluate(model, test_loader, val_loader, args)
         return
@@ -106,11 +113,16 @@ def main():
     scores = ['epoch\tlr\ttrain_loss\tval_loss\ttrain_prec1'
               '\tval_prec1\ttrain_prec5\tval_prec5']
 
+    steps_schedule_T = args.epochs * math.ceil(len(train_loader.dataset) / args.batch_size)
+    _schedule_T = partial(schedule_T, n_steps=steps_schedule_T)
+
+    _step = 0
     for epoch in range(args.start_epoch, args.epochs):
 
-        train_loss, train_prec1, train_prec5, lr = train(train_loader, model, criterion, optimizer, epoch)
+        train_loss, train_prec1, train_prec5, lr, _step = train(train_loader, model, criterion, optimizer, epoch,
+                                                                args.num_classes, args.likelihood, _step, _schedule_T)
 
-        val_loss, val_prec1, val_prec5 = validate(val_loader, model, criterion)
+        val_loss, val_prec1, val_prec5 = validate(val_loader, model, criterion, args.num_classes, args.likelihood)
 
         scores.append(('{}\t{:.3f}' + '\t{:.4f}' * 6)
                       .format(epoch, lr, train_loss, val_loss,
@@ -136,11 +148,11 @@ def main():
     ### Test the final model
 
     print('********** Final prediction results **********')
-    validate(test_loader, model, criterion)
+    validate(test_loader, model, criterion, args.num_classes, args.likelihood)
 
     return 
 
-def train(train_loader, model, criterion, optimizer, epoch):
+def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelihood, step, step_func=None):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -172,9 +184,28 @@ def train(train_loader, model, criterion, optimizer, epoch):
         if not isinstance(output, list):
             output = [output]
 
+        # print(f"target: {target.shape}")
+        # print(f"model output: {len(output)}")
+        # print(f"model output: {output[0].shape}, {output[-1].shape}")
+        # print(target.min())
+        # print(target.max())
+        #
+        # y_one_hot = nn.functional.one_hot(target_var, num_classes=num_classes).float()
+        # print(y_one_hot.shape)
+        # print(target_var[0])
+        # print(y_one_hot[0, :].argmax())
+        # break
+
         loss = 0.0
         for j in range(len(output)):
-            loss += criterion(output[j], target_var)
+            if likelihood == 'softmax':
+                T = 1.
+                loss += criterion(output[j], target_var)
+            elif likelihood == 'OVR':
+                T = step_func(step)
+                loss += criterion(T * output[j], nn.functional.one_hot(target_var, num_classes=num_classes).float())
+            else:
+                raise ValueError()
 
         losses.update(loss.item(), input.size(0))
 
@@ -198,14 +229,16 @@ def train(train_loader, model, criterion, optimizer, epoch):
                   'Data {data_time.avg:.3f}\t'
                   'Loss {loss.val:.4f}\t'
                   'Acc@1 {top1.val:.4f}\t'
-                  'Acc@5 {top5.val:.4f}'.format(
+                  'Acc@5 {top5.val:.4f}\t'
+                   'T: {T}'.format(
                     epoch, i + 1, len(train_loader),
                     batch_time=batch_time, data_time=data_time,
-                    loss=losses, top1=top1[-1], top5=top5[-1]))
+                    loss=losses, top1=top1[-1], top5=top5[-1], T=T))
+        step += 1
 
-    return losses.avg, top1[-1].avg, top5[-1].avg, running_lr
+    return losses.avg, top1[-1].avg, top5[-1].avg, running_lr, step
 
-def validate(val_loader, model, criterion):
+def validate(val_loader, model, criterion, num_classes, likelihood):
     batch_time = AverageMeter()
     losses = AverageMeter()
     data_time = AverageMeter()
@@ -233,7 +266,10 @@ def validate(val_loader, model, criterion):
 
             loss = 0.0
             for j in range(len(output)):
-                loss += criterion(output[j], target_var)
+                if likelihood == 'softmax':
+                    loss += criterion(output[j], target_var)
+                elif likelihood == 'OVR':
+                    loss += criterion(output[j], nn.functional.one_hot(target_var, num_classes=num_classes).float())
 
             losses.update(loss.item(), input.size(0))
 
