@@ -45,6 +45,7 @@ import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 import torch.optim
 import wandb
+import numpy as np
 
 torch.manual_seed(args.seed)
 
@@ -77,12 +78,15 @@ def main():
         'project': 'anytime-poe-msdnet',
         'entity': 'metodj',
         'notes': '',
-        'mode': 'offline',
+        'mode': 'online',
         'config': vars(args)
     }
     with wandb.init(**wandb_kwargs) as run:
         print(torch.cuda.is_available(), torch.cuda.device_count(), torch.cuda.current_device(),
               torch.cuda.get_device_name(0))
+        model_parameters = filter(lambda p: p.requires_grad, model.parameters())
+        params = sum([np.prod(p.size()) for p in model_parameters])
+        print(f'nr. of trainable params: {params}')
         print(args)
 
         if args.arch.startswith('alexnet') or args.arch.startswith('vgg'):
@@ -139,10 +143,14 @@ def main():
         _step = 0
         for epoch in range(args.start_epoch, args.epochs):
 
-            train_loss, train_prec1, train_prec5, lr, _step, T = train(train_loader, model, criterion, optimizer, epoch,
-                                                                    args.num_classes, args.likelihood, _step, fun_schedule_T, args.alpha)
+            train_loss, train_prec1, train_prec5, lr, _step, \
+                T, train_loss_ind, train_loss_prod = train(train_loader, model, criterion, optimizer, epoch,
+                                                           args.num_classes, args.likelihood, _step,
+                                                           fun_schedule_T, args.alpha)
             run.log({'train_loss': train_loss})
             run.log({'train_prec1': train_prec1})
+            run.log({'train_loss_ind': train_loss_ind})
+            run.log({'train_loss_prod': train_loss_prod})
             run.log({'T': T})
 
             val_loss, val_prec1, val_prec5 = validate(val_loader, model, criterion,
@@ -185,6 +193,11 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
+
+    # useful for monitoring PoE training
+    losses_individual = AverageMeter()
+    losses_prod = AverageMeter()
+
     top1, top5 = [], []
     for i in range(args.nBlocks):
         top1.append(AverageMeter())
@@ -238,7 +251,15 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
 
         if (alpha is not None) and alpha != 0.:
             prod_loss = get_prod_loss(output, criterion, num_classes, T)
+
+            losses_individual.update(loss.item(), input.size(0))
+            losses_prod.update(prod_loss.item(), input.size(0))
+
             loss = loss + alpha * prod_loss
+        else:
+            # store dummy values
+            losses_individual.update(0., input.size(0))
+            losses_prod.update(0., input.size(0))
 
         losses.update(loss.item(), input.size(0))
 
@@ -269,7 +290,7 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
                     loss=losses, top1=top1[-1], top5=top5[-1], T=T))
         step += 1
 
-    return losses.avg, top1[-1].avg, top5[-1].avg, running_lr, step, T
+    return losses.avg, top1[-1].avg, top5[-1].avg, running_lr, step, T, losses_individual.avg, losses_prod.avg
 
 def validate(val_loader, model, criterion, num_classes, likelihood, step, step_func=None):
     batch_time = AverageMeter()
