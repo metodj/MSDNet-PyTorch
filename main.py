@@ -44,8 +44,11 @@ import torch.nn as nn
 import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 import torch.optim
+import wandb
 
 torch.manual_seed(args.seed)
+
+os.environ["WANDB_API_KEY"] = "e31842f98007cca7e04fd98359ea9bdadda29073"
 
 def main():
 
@@ -70,89 +73,109 @@ def main():
     model = getattr(models, args.arch)(args)
 
     print(args)
+    wandb_kwargs = {
+        'project': 'anytime-poe-msdnet',
+        'entity': 'metodj',
+        'notes': '',
+        'mode': 'online',
+        'config': vars(args)
+    }
+    with wandb.init(**wandb_kwargs) as run:
 
-    if args.arch.startswith('alexnet') or args.arch.startswith('vgg'):
-        model.features = torch.nn.DataParallel(model.features)
-        model.cuda()
-    else:
-        model = torch.nn.DataParallel(model).cuda()
-
-    if args.likelihood == 'softmax':
-        criterion = nn.CrossEntropyLoss().cuda()
-    elif args.likelihood == 'OVR':
-        criterion = nn.BCEWithLogitsLoss().cuda()
-    else:
-        raise ValueError()
-
-    optimizer = torch.optim.SGD(model.parameters(), args.lr,
-                                momentum=args.momentum,
-                                weight_decay=args.weight_decay)
-
-    if args.resume:
-        checkpoint = load_checkpoint(args)
-        if checkpoint is not None:
-            args.start_epoch = checkpoint['epoch'] + 1
-            best_prec1 = checkpoint['best_prec1']
-            model.load_state_dict(checkpoint['state_dict'])
-            optimizer.load_state_dict(checkpoint['optimizer'])
-
-    cudnn.benchmark = True
-
-    train_loader, val_loader, test_loader = get_dataloaders(args)
-
-    if args.evalmode is not None:
-        state_dict = torch.load(args.evaluate_from)['state_dict']
-        model.load_state_dict(state_dict)
-
-        if args.evalmode == 'anytime':
-            # TODO: step in case args.likelihood=='OVR'
-            validate(test_loader, model, criterion, args.num_classes, args.likelihood, step=1.)
+        if args.arch.startswith('alexnet') or args.arch.startswith('vgg'):
+            model.features = torch.nn.DataParallel(model.features)
+            model.cuda()
         else:
-            dynamic_evaluate(model, test_loader, val_loader, args)
+            model = torch.nn.DataParallel(model).cuda()
+
+        if args.likelihood == 'softmax':
+            criterion = nn.CrossEntropyLoss().cuda()
+        elif args.likelihood == 'OVR':
+            criterion = nn.BCEWithLogitsLoss().cuda()
+        else:
+            raise ValueError()
+
+        optimizer = torch.optim.SGD(model.parameters(), args.lr,
+                                    momentum=args.momentum,
+                                    weight_decay=args.weight_decay)
+
+        if args.resume:
+            checkpoint = load_checkpoint(args)
+            if checkpoint is not None:
+                args.start_epoch = checkpoint['epoch'] + 1
+                best_prec1 = checkpoint['best_prec1']
+                model.load_state_dict(checkpoint['state_dict'])
+                optimizer.load_state_dict(checkpoint['optimizer'])
+
+        cudnn.benchmark = True
+
+        train_loader, val_loader, test_loader = get_dataloaders(args)
+
+        if args.evalmode is not None:
+            state_dict = torch.load(args.evaluate_from)['state_dict']
+            model.load_state_dict(state_dict)
+
+            if args.evalmode == 'anytime':
+                # TODO: step in case args.likelihood=='OVR'
+                validate(test_loader, model, criterion, args.num_classes, args.likelihood, step=1.)
+            else:
+                dynamic_evaluate(model, test_loader, val_loader, args)
+            return
+
+        scores = ['epoch\tlr\ttrain_loss\tval_loss\ttrain_prec1'
+                  '\tval_prec1\ttrain_prec5\tval_prec5']
+
+        if args.schedule_T_type == 'sigmoid':
+            steps_schedule_T = args.epochs * math.ceil(len(train_loader.dataset) / args.batch_size)
+            fun_schedule_T = partial(schedule_T, n_steps=steps_schedule_T, T_start=args.schedule_T_start, T_end=args.schedule_T_end)
+        elif args.schedule_T_type == 'constant':
+            fun_schedule_T = lambda x: args.schedule_T_start
+        else:
+            raise ValueError()
+
+        _step = 0
+        for epoch in range(args.start_epoch, args.epochs):
+
+            train_loss, train_prec1, train_prec5, lr, _step, T = train(train_loader, model, criterion, optimizer, epoch,
+                                                                    args.num_classes, args.likelihood, _step, fun_schedule_T)
+            run.log({'train_loss': train_loss})
+            run.log({'train_prec1': train_prec1})
+            run.log({'T': T})
+
+            val_loss, val_prec1, val_prec5 = validate(val_loader, model, criterion,
+                                                      args.num_classes, args.likelihood, _step, fun_schedule_T)
+
+            run.log({'val_loss': train_loss})
+            run.log({'val_prec1': train_prec1})
+
+            scores.append(('{}\t{:.3f}' + '\t{:.4f}' * 6)
+                          .format(epoch, lr, train_loss, val_loss,
+                                  train_prec1, val_prec1, train_prec5, val_prec5))
+
+            is_best = val_prec1 > best_prec1
+            if is_best:
+                best_prec1 = val_prec1
+                best_epoch = epoch
+                print('Best var_prec1 {}'.format(best_prec1))
+
+            if (epoch + 1) % 10 == 0:
+                model_filename = 'checkpoint_%03d.pth.tar' % epoch
+                save_checkpoint({
+                    'epoch': epoch,
+                    'arch': args.arch,
+                    'state_dict': model.state_dict(),
+                    'best_prec1': best_prec1,
+                    'optimizer': optimizer.state_dict(),
+                }, args, is_best, model_filename, scores)
+
+        print('Best val_prec1: {:.4f} at epoch {}'.format(best_prec1, best_epoch))
+
+        ### Test the final model
+
+        print('********** Final prediction results **********')
+        validate(test_loader, model, criterion, args.num_classes, args.likelihood, _step, fun_schedule_T)
+
         return
-
-    scores = ['epoch\tlr\ttrain_loss\tval_loss\ttrain_prec1'
-              '\tval_prec1\ttrain_prec5\tval_prec5']
-
-    steps_schedule_T = args.epochs * math.ceil(len(train_loader.dataset) / args.batch_size)
-    _schedule_T = partial(schedule_T, n_steps=steps_schedule_T)
-
-    _step = 0
-    for epoch in range(args.start_epoch, args.epochs):
-
-        train_loss, train_prec1, train_prec5, lr, _step = train(train_loader, model, criterion, optimizer, epoch,
-                                                                args.num_classes, args.likelihood, _step, _schedule_T)
-
-        val_loss, val_prec1, val_prec5 = validate(val_loader, model, criterion,
-                                                  args.num_classes, args.likelihood, _step, _schedule_T)
-
-        scores.append(('{}\t{:.3f}' + '\t{:.4f}' * 6)
-                      .format(epoch, lr, train_loss, val_loss,
-                              train_prec1, val_prec1, train_prec5, val_prec5))
-
-        is_best = val_prec1 > best_prec1
-        if is_best:
-            best_prec1 = val_prec1
-            best_epoch = epoch
-            print('Best var_prec1 {}'.format(best_prec1))
-
-        model_filename = 'checkpoint_%03d.pth.tar' % epoch
-        save_checkpoint({
-            'epoch': epoch,
-            'arch': args.arch,
-            'state_dict': model.state_dict(),
-            'best_prec1': best_prec1,
-            'optimizer': optimizer.state_dict(),
-        }, args, is_best, model_filename, scores)
-
-    print('Best val_prec1: {:.4f} at epoch {}'.format(best_prec1, best_epoch))
-
-    ### Test the final model
-
-    print('********** Final prediction results **********')
-    validate(test_loader, model, criterion, args.num_classes, args.likelihood, _step, _schedule_T)
-
-    return 
 
 def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelihood, step, step_func=None):
     batch_time = AverageMeter()
@@ -238,7 +261,7 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
                     loss=losses, top1=top1[-1], top5=top5[-1], T=T))
         step += 1
 
-    return losses.avg, top1[-1].avg, top5[-1].avg, running_lr, step
+    return losses.avg, top1[-1].avg, top5[-1].avg, running_lr, step, T
 
 def validate(val_loader, model, criterion, num_classes, likelihood, step, step_func=None):
     batch_time = AverageMeter()

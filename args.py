@@ -61,7 +61,6 @@ arch_group.add_argument('--grFactor', default='1-2-4', type=str)
 arch_group.add_argument('--prune', default='max', choices=['min', 'max'])
 arch_group.add_argument('--bnFactor', default='1-2-4')
 arch_group.add_argument('--bottleneck', default=True, type=bool)
-arch_group.add_argument('--likelihood', default=True, type=str, choices=['softmax', 'OVR'])
 
 
 # training related
@@ -89,3 +88,13 @@ optim_group.add_argument('--momentum', default=0.9, type=float, metavar='M',
                          help='momentum (default=0.9)')
 optim_group.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
                          metavar='W', help='weight decay (default: 1e-4)')
+
+
+# poe related
+poe_group = arg_parser.add_argument_group('poe',
+                                           'product-of-experts training')
+poe_group.add_argument('--likelihood', default='softmax', type=str, choices=['softmax', 'OVR'])
+# schedule T params are only relevant when OVR likelihood is used
+poe_group.add_argument('--schedule_T_type', default='sigmoid', type=str, choices=['sigmoid', 'constant'])
+poe_group.add_argument('--schedule_T_start', default=2.0, type=float)
+poe_group.add_argument('--schedule_T_end', default=16.0, type=float)
