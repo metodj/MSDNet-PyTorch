@@ -78,7 +78,7 @@ def main():
         'project': 'anytime-poe-msdnet',
         'entity': 'metodj',
         'notes': '',
-        'mode': 'online',
+        'mode': 'offline',
         'config': vars(args)
     }
     with wandb.init(**wandb_kwargs) as run:
@@ -251,7 +251,6 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
 
         if (alpha is not None) and alpha != 0.:
             prod_loss = get_prod_loss(output, criterion, num_classes, T)
-            prod_loss = torch.log(prod_loss + 1e-10)
 
             losses_individual.update(loss.item(), input.size(0))
             losses_prod.update(prod_loss.item(), input.size(0))
