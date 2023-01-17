@@ -1,6 +1,5 @@
 import os
 from args import arg_parser
-import torch
 
 
 def parse_args():
@@ -26,7 +25,3 @@ def parse_args():
         args.num_classes = 1000
 
     return args
-
-
-def schedule_T(step, n_steps, T_start=2., T_end=16.):
-    return T_start + (T_end - T_start) * torch.sigmoid(-torch.tensor((-step + n_steps/2) / (n_steps/10)))

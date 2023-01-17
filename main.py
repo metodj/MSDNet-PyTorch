@@ -16,7 +16,7 @@ from args import arg_parser
 from adaptive_inference import dynamic_evaluate
 import models
 from op_counter import measure_model
-from utils import schedule_T
+from utils_poe import schedule_T, get_prod_loss
 
 args = arg_parser.parse_args()
 
@@ -72,15 +72,18 @@ def main():
         
     model = getattr(models, args.arch)(args)
 
-    print(args)
+
     wandb_kwargs = {
         'project': 'anytime-poe-msdnet',
         'entity': 'metodj',
         'notes': '',
-        'mode': 'online',
+        'mode': 'offline',
         'config': vars(args)
     }
     with wandb.init(**wandb_kwargs) as run:
+        print(torch.cuda.is_available(), torch.cuda.device_count(), torch.cuda.current_device(),
+              torch.cuda.get_device_name(0))
+        print(args)
 
         if args.arch.startswith('alexnet') or args.arch.startswith('vgg'):
             model.features = torch.nn.DataParallel(model.features)
@@ -137,7 +140,7 @@ def main():
         for epoch in range(args.start_epoch, args.epochs):
 
             train_loss, train_prec1, train_prec5, lr, _step, T = train(train_loader, model, criterion, optimizer, epoch,
-                                                                    args.num_classes, args.likelihood, _step, fun_schedule_T)
+                                                                    args.num_classes, args.likelihood, _step, fun_schedule_T, args.alpha)
             run.log({'train_loss': train_loss})
             run.log({'train_prec1': train_prec1})
             run.log({'T': T})
@@ -145,8 +148,8 @@ def main():
             val_loss, val_prec1, val_prec5 = validate(val_loader, model, criterion,
                                                       args.num_classes, args.likelihood, _step, fun_schedule_T)
 
-            run.log({'val_loss': train_loss})
-            run.log({'val_prec1': train_prec1})
+            run.log({'val_loss': val_loss})
+            run.log({'val_prec1': val_prec1})
 
             scores.append(('{}\t{:.3f}' + '\t{:.4f}' * 6)
                           .format(epoch, lr, train_loss, val_loss,
@@ -177,7 +180,8 @@ def main():
 
         return
 
-def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelihood, step, step_func=None):
+
+def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelihood, step, step_func=None, alpha=None):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -231,6 +235,10 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
                 loss += criterion(T * output[j], nn.functional.one_hot(target_var, num_classes=num_classes).float())
             else:
                 raise ValueError()
+
+        if (alpha is not None) and alpha != 0.:
+            prod_loss = get_prod_loss(output, criterion, num_classes, T)
+            loss = loss + alpha * prod_loss
 
         losses.update(loss.item(), input.size(0))
 

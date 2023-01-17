@@ -98,3 +98,4 @@ poe_group.add_argument('--likelihood', default='softmax', type=str, choices=['so
 poe_group.add_argument('--schedule_T_type', default='sigmoid', type=str, choices=['sigmoid', 'constant'])
 poe_group.add_argument('--schedule_T_start', default=2.0, type=float)
 poe_group.add_argument('--schedule_T_end', default=16.0, type=float)
+poe_group.add_argument('--alpha', default=1.0, type=float)
