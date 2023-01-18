@@ -102,6 +102,7 @@ def main():
         else:
             raise ValueError()
 
+        wandb.watch(model, log='gradients', log_freq=500)
         optimizer = torch.optim.SGD(model.parameters(), args.lr,
                                     momentum=args.momentum,
                                     weight_decay=args.weight_decay)
