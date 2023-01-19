@@ -23,3 +23,8 @@ def get_prod_loss(output: List[torch.Tensor], criterion: torch.nn.modules.loss, 
 
     criterion.reduction = 'mean'
     return torch.sum(torch.log(prod_loss + eps))
+
+
+def get_grad_stats(model):
+    grad = torch.cat([torch.flatten(v.grad.abs()) for _, v in model.named_parameters()])
+    return torch.mean(grad), torch.std(grad)

@@ -16,7 +16,7 @@ from args import arg_parser
 from adaptive_inference import dynamic_evaluate
 import models
 from op_counter import measure_model
-from utils_poe import schedule_T, get_prod_loss
+from utils_poe import schedule_T, get_prod_loss, get_grad_stats
 
 args = arg_parser.parse_args()
 
@@ -145,13 +145,16 @@ def main():
         for epoch in range(args.start_epoch, args.epochs):
 
             train_loss, train_prec1, train_prec5, lr, _step, \
-                T, train_loss_ind, train_loss_prod = train(train_loader, model, criterion, optimizer, epoch,
+                T, train_loss_ind, train_loss_prod, \
+                grad_mean, grad_std = train(train_loader, model, criterion, optimizer, epoch,
                                                            args.num_classes, args.likelihood, _step,
                                                            fun_schedule_T, args.alpha)
             run.log({'train_loss': train_loss})
             run.log({'train_prec1': train_prec1})
             run.log({'train_loss_ind': train_loss_ind})
             run.log({'train_loss_prod': train_loss_prod})
+            run.log({'grad_mean': grad_mean})
+            run.log({'grad_std': grad_std})
             run.log({'T': T})
 
             val_loss, val_prec1, val_prec5 = validate(val_loader, model, criterion,
@@ -210,6 +213,7 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
     end = time.time()
 
     running_lr = None
+    grad_mean, grad_std = None, None
     for i, (input, target) in enumerate(train_loader):
         lr = adjust_learning_rate(optimizer, epoch, args, batch=i,
                                   nBatch=len(train_loader), method=args.lr_type)
@@ -272,6 +276,8 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
         # compute gradient and do SGD step
         optimizer.zero_grad()
         loss.backward()
+        if i == 0:
+            grad_mean, grad_stat = get_grad_stats(model)
         optimizer.step()
 
         # measure elapsed time
@@ -291,7 +297,7 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
                     loss=losses, top1=top1[-1], top5=top5[-1], T=T))
         step += 1
 
-    return losses.avg, top1[-1].avg, top5[-1].avg, running_lr, step, T, losses_individual.avg, losses_prod.avg
+    return losses.avg, top1[-1].avg, top5[-1].avg, running_lr, step, T, losses_individual.avg, losses_prod.avg, grad_mean, grad_stat
 
 def validate(val_loader, model, criterion, num_classes, likelihood, step, step_func=None):
     batch_time = AverageMeter()
