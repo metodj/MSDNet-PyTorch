@@ -237,14 +237,15 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
         L = len(output)
         if likelihood == 'softmax':
             T = 1.
-
-            if ensemble_type == 'DE':
+            if ensemble_type == 'DE' or ensemble_type == 'hybrid':
                 for j in range(L):
                    loss += criterion(output[j], target_var)
-            elif ensemble_type == 'PoE':
-                loss += criterion(torch.mean(torch.stack(output), dim=0), target_var)
-            elif ensemble_type == 'PoE-depth-weights':
-                loss += criterion(torch.mean(torch.stack(get_depth_weighted_logits(output, L)), dim=0), target_var) * L
+            if 'PoE' in ensemble_type or ensemble_type == 'hybrid':
+                prod_loss_multp = alpha * L
+                if 'depth-weights' in ensemble_type:
+                    loss += prod_loss_multp * criterion(torch.mean(torch.stack(get_depth_weighted_logits(output, L)), dim=0), target_var)
+                else:
+                    loss += prod_loss_multp * criterion(torch.mean(torch.stack(output), dim=0), target_var)
         elif likelihood == 'OVR':
             T = step_func(step)
             for j in range(L):
