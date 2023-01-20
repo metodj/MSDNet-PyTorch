@@ -148,7 +148,7 @@ def main():
                 T, train_loss_ind, train_loss_prod, \
                 grad_mean, grad_std = train(train_loader, model, criterion, optimizer, epoch,
                                                            args.num_classes, args.likelihood, _step,
-                                                           fun_schedule_T, args.alpha)
+                                                           fun_schedule_T, args.alpha, args.ensemble_type)
             run.log({'train_loss': train_loss})
             run.log({'train_prec1': train_prec1})
             run.log({'train_loss_ind': train_loss_ind})
@@ -193,7 +193,7 @@ def main():
         return
 
 
-def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelihood, step, step_func=None, alpha=None):
+def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelihood, step, step_func=None, alpha=0., ensemble_type="DE"):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -231,40 +231,26 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
         if not isinstance(output, list):
             output = [output]
 
-        # print(f"target: {target.shape}")
-        # print(f"model output: {len(output)}")
-        # print(f"model output: {output[0].shape}, {output[-1].shape}")
-        # print(target.min())
-        # print(target.max())
-        #
-        # y_one_hot = nn.functional.one_hot(target_var, num_classes=num_classes).float()
-        # print(y_one_hot.shape)
-        # print(target_var[0])
-        # print(y_one_hot[0, :].argmax())
-        # break
-
         loss = 0.0
-        for j in range(len(output)):
-            if likelihood == 'softmax':
-                T = 1.
-                loss += criterion(output[j], target_var)
-            elif likelihood == 'OVR':
-                T = step_func(step)
+        if likelihood == 'softmax':
+            T = 1.
+            if ensemble_type == 'DE':
+                for j in range(len(output)):
+                   loss += criterion(output[j], target_var)
+            elif ensemble_type == 'PoE':
+                loss += criterion(torch.mean(torch.stack(output), dim=0), target_var)
+        elif likelihood == 'OVR':
+            T = step_func(step)
+            for j in range(len(output)):
                 loss += criterion(T * output[j], nn.functional.one_hot(target_var, num_classes=num_classes).float())
-            else:
-                raise ValueError()
 
-        if (alpha is not None) and alpha != 0.:
-            prod_loss = get_prod_loss(output, criterion, num_classes, T)
+            if ensemble_type == 'PoE'  and alpha != 0.:
+                prod_loss = get_prod_loss(output, criterion, num_classes, T)
 
-            losses_individual.update(loss.item(), input.size(0))
-            losses_prod.update(prod_loss.item(), input.size(0))
+                losses_individual.update(loss.item(), input.size(0))
+                losses_prod.update(prod_loss.item(), input.size(0))
 
-            loss = loss + alpha * prod_loss
-        else:
-            # store dummy values
-            losses_individual.update(0., input.size(0))
-            losses_prod.update(0., input.size(0))
+                loss = loss + alpha * prod_loss
 
         losses.update(loss.item(), input.size(0))
 
