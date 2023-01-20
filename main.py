@@ -16,7 +16,7 @@ from args import arg_parser
 from adaptive_inference import dynamic_evaluate
 import models
 from op_counter import measure_model
-from utils_poe import schedule_T, get_prod_loss, get_grad_stats
+from utils_poe import schedule_T, get_prod_loss, get_grad_stats, get_depth_weighted_logits
 
 args = arg_parser.parse_args()
 
@@ -98,7 +98,7 @@ def main():
         if args.likelihood == 'softmax':
             criterion = nn.CrossEntropyLoss().cuda()
         elif args.likelihood == 'OVR':
-            criterion = nn.BCEWithLogitsLoss(reduction='sum').cuda()
+            criterion = nn.BCEWithLogitsLoss(reduction='mean').cuda()
         else:
             raise ValueError()
 
@@ -150,7 +150,9 @@ def main():
                                                            args.num_classes, args.likelihood, _step,
                                                            fun_schedule_T, args.alpha, args.ensemble_type)
             run.log({'train_loss': train_loss})
-            run.log({'train_prec1': train_prec1})
+            run.log({'train_prec1': train_prec1[-1].avg})
+            for j in range(args.nBlocks):
+                run.log({f'train_prec1_block_{j}': train_prec1[j].avg})
             run.log({'train_loss_ind': train_loss_ind})
             run.log({'train_loss_prod': train_loss_prod})
             run.log({'grad_mean': grad_mean})
@@ -165,7 +167,7 @@ def main():
 
             scores.append(('{}\t{:.3f}' + '\t{:.4f}' * 6)
                           .format(epoch, lr, train_loss, val_loss,
-                                  train_prec1, val_prec1, train_prec5, val_prec5))
+                                  train_prec1[-1].avg, val_prec1, train_prec5, val_prec5))
 
             is_best = val_prec1 > best_prec1
             if is_best:
@@ -232,16 +234,20 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
             output = [output]
 
         loss = 0.0
+        L = len(output)
         if likelihood == 'softmax':
             T = 1.
+
             if ensemble_type == 'DE':
-                for j in range(len(output)):
+                for j in range(L):
                    loss += criterion(output[j], target_var)
             elif ensemble_type == 'PoE':
                 loss += criterion(torch.mean(torch.stack(output), dim=0), target_var)
+            elif ensemble_type == 'PoE-depth-weights':
+                loss += criterion(torch.mean(torch.stack(get_depth_weighted_logits(output, L)), dim=0), target_var) * L
         elif likelihood == 'OVR':
             T = step_func(step)
-            for j in range(len(output)):
+            for j in range(L):
                 loss += criterion(T * output[j], nn.functional.one_hot(target_var, num_classes=num_classes).float())
 
             if ensemble_type == 'PoE'  and alpha != 0.:
@@ -283,7 +289,7 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
                     loss=losses, top1=top1[-1], top5=top5[-1], T=T))
         step += 1
 
-    return losses.avg, top1[-1].avg, top5[-1].avg, running_lr, step, T, losses_individual.avg, losses_prod.avg, grad_mean, grad_stat
+    return losses.avg, top1, top5[-1].avg, running_lr, step, T, losses_individual.avg, losses_prod.avg, grad_mean, grad_stat
 
 def validate(val_loader, model, criterion, num_classes, likelihood, step, step_func=None):
     batch_time = AverageMeter()
@@ -312,6 +318,7 @@ def validate(val_loader, model, criterion, num_classes, likelihood, step, step_f
                 output = [output]
 
             loss = 0.0
+            # TODO: align validation loss with train loss above
             for j in range(len(output)):
                 if likelihood == 'softmax':
                     T = 1.
