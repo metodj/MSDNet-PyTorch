@@ -98,7 +98,7 @@ def main():
         if args.likelihood == 'softmax':
             criterion = nn.CrossEntropyLoss().cuda()
         elif args.likelihood == 'OVR':
-            criterion = nn.BCEWithLogitsLoss().cuda()
+            criterion = nn.BCEWithLogitsLoss(reduction='sum').cuda()
         else:
             raise ValueError()
 
