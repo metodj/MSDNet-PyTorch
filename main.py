@@ -16,7 +16,8 @@ from args import arg_parser
 from adaptive_inference import dynamic_evaluate
 import models
 from op_counter import measure_model
-from utils_poe import schedule_T, get_prod_loss, get_grad_stats, get_depth_weighted_logits
+from utils_poe import schedule_T, get_prod_loss, get_grad_stats, get_depth_weighted_logits, get_cascade_dynamic_weights
+from utils import AverageMeter
 
 args = arg_parser.parse_args()
 
@@ -142,14 +143,15 @@ def main():
             raise ValueError()
 
         _step = 0
+        train_prec1 = None
         for epoch in range(args.start_epoch, args.epochs):
 
             train_loss, train_prec1, train_prec5, lr, _step, \
                 T, train_loss_ind, train_loss_prod, \
                 grad_mean, grad_std = train(train_loader, model, criterion, optimizer, epoch,
                                                            args.num_classes, args.likelihood, _step,
-                                                           fun_schedule_T, args.alpha, args.ensemble_type)
-            run.log({'train_loss': train_loss})
+                                                           fun_schedule_T, args.alpha, args.ensemble_type, train_prec1)
+            run.log({'train_loss': train_loss.avg})
             run.log({'train_prec1': train_prec1[-1].avg})
             for j in range(args.nBlocks):
                 run.log({f'train_prec1_block_{j}': train_prec1[j].avg})
@@ -158,6 +160,7 @@ def main():
             run.log({'grad_mean': grad_mean})
             run.log({'grad_std': grad_std})
             run.log({'T': T})
+            run.log({'lr': lr})
 
             val_loss, val_prec1, val_prec5 = validate(val_loader, model, criterion,
                                                       args.num_classes, args.likelihood, _step, fun_schedule_T)
@@ -166,7 +169,7 @@ def main():
             run.log({'val_prec1': val_prec1})
 
             scores.append(('{}\t{:.3f}' + '\t{:.4f}' * 6)
-                          .format(epoch, lr, train_loss, val_loss,
+                          .format(epoch, lr, train_loss.avg, val_loss,
                                   train_prec1[-1].avg, val_prec1, train_prec5, val_prec5))
 
             is_best = val_prec1 > best_prec1
@@ -194,8 +197,7 @@ def main():
 
         return
 
-
-def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelihood, step, step_func=None, alpha=0., ensemble_type="DE"):
+def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelihood, step, step_func=None, alpha=0., ensemble_type="DE", train_prec1=None):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -247,11 +249,13 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
                 else:
                     loss += prod_loss_multp * criterion(torch.mean(torch.stack(output), dim=0), target_var)
             if ensemble_type == 'cascade':
+                weights = get_cascade_dynamic_weights(train_prec1, L)
+                if i == 0: print(weights)
                 for j in range(L):
                     if j == 0:
-                        loss += criterion(output[j], target_var)
+                        loss += weights[j] * criterion(output[j], target_var)
                     else:
-                        loss += criterion(torch.mean(torch.stack(output[:j + 1]), dim=0), target_var)
+                        loss += weights[j] * criterion(torch.mean(torch.stack(output[:j + 1]), dim=0), target_var)
         elif likelihood == 'OVR':
             T = step_func(step)
             for j in range(L):
@@ -299,7 +303,7 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
                     loss=losses, top1=top1[-1], top5=top5[-1], T=T))
         step += 1
 
-    return losses.avg, top1, top5[-1].avg, running_lr, step, T, losses_individual.avg, losses_prod.avg, grad_mean, grad_stat
+    return losses, top1, top5[-1].avg, running_lr, step, T, losses_individual.avg, losses_prod.avg, grad_mean, grad_stat
 
 def validate(val_loader, model, criterion, num_classes, likelihood, step, step_func=None):
     batch_time = AverageMeter()
@@ -403,24 +407,6 @@ def load_checkpoint(args):
     state = torch.load(model_filename)
     print("=> loaded checkpoint '{}'".format(model_filename))
     return state
-
-class AverageMeter(object):
-    """Computes and stores the average and current value"""
-
-    def __init__(self):
-        self.reset()
-
-    def reset(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
 
 def accuracy(output, target, topk=(1,)):
     """Computes the precor@k for the specified values of k"""

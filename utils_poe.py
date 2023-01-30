@@ -1,5 +1,6 @@
 import torch
-from typing import List
+from typing import List, Union
+from utils import AverageMeter
 
 
 def schedule_T(step, n_steps, T_start=2., T_end=16.):
@@ -34,3 +35,12 @@ def get_depth_weighted_logits(logits: List[torch.Tensor], depth: int) -> List[to
     w = torch.tensor([depth - i for i in range(depth)])
     w = w / w.sum()
     return [w[j] * logits[j] for j in range(depth)]
+
+
+def get_cascade_dynamic_weights(train_prec: Union[List[AverageMeter], None], L: int):
+    if train_prec is None:
+        return [1. for _ in range(L)]
+    assert len(train_prec) == L
+    weights = [1 / train_prec[l].avg for l in range(L)]
+    w_sum = sum(weights)
+    return [w / w_sum for w in weights]
