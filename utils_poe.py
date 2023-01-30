@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 from typing import List, Union
 from utils import AverageMeter
 
@@ -37,10 +38,18 @@ def get_depth_weighted_logits(logits: List[torch.Tensor], depth: int) -> List[to
     return [w[j] * logits[j] for j in range(depth)]
 
 
-def get_cascade_dynamic_weights(train_prec: Union[List[AverageMeter], None], L: int):
+def get_cascade_dynamic_weights(train_prec: Union[List[AverageMeter], None], L: int, weight_type: str = 'depth'):
     if train_prec is None:
         return [1. for _ in range(L)]
     assert len(train_prec) == L
     weights = [1 / train_prec[l].avg for l in range(L)]
-    w_sum = sum(weights)
-    return [w / w_sum for w in weights]
+    if weight_type == 'softmax':
+        return np.exp(weights) / sum(np.exp(weights))
+    elif weight_type == 'sum':
+        w_sum = sum(weights)
+        return [w / w_sum for w in weights]
+    elif weight_type == 'depth':
+        L_sum = L * (L + 1) / 2
+        return [l / L_sum for l in range(1, L + 1)]
+    else:
+        raise ValueError()
