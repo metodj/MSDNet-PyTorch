@@ -246,6 +246,12 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
                     loss += prod_loss_multp * criterion(torch.mean(torch.stack(get_depth_weighted_logits(output, L)), dim=0), target_var)
                 else:
                     loss += prod_loss_multp * criterion(torch.mean(torch.stack(output), dim=0), target_var)
+            if ensemble_type == 'cascade':
+                for j in range(L):
+                    if j == 0:
+                        loss += criterion(output[j], target_var)
+                    else:
+                        loss += criterion(torch.mean(torch.stack(output[:j + 1]), dim=0), target_var)
         elif likelihood == 'OVR':
             T = step_func(step)
             for j in range(L):
@@ -258,6 +264,9 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
                 losses_prod.update(prod_loss.item(), input.size(0))
 
                 loss = loss + alpha * prod_loss
+
+            if ensemble_type == 'cascade':
+                raise NotImplementedError()
 
         losses.update(loss.item(), input.size(0))
 
