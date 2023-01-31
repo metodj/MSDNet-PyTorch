@@ -38,7 +38,7 @@ def get_depth_weighted_logits(logits: List[torch.Tensor], depth: int) -> List[to
     return [w[j] * logits[j] for j in range(depth)]
 
 
-def get_cascade_dynamic_weights(train_prec: Union[List[AverageMeter], None], L: int, weight_type: str = 'depth'):
+def get_cascade_dynamic_weights(train_prec: Union[List[AverageMeter], None], L: int, weight_type: str = 'uniform'):
     if train_prec is None:
         return [1. for _ in range(L)]
     assert len(train_prec) == L
@@ -51,5 +51,7 @@ def get_cascade_dynamic_weights(train_prec: Union[List[AverageMeter], None], L: 
     elif weight_type == 'depth':
         L_sum = L * (L + 1) / 2
         return [l / L_sum for l in range(1, L + 1)]
+    elif weight_type == 'uniform':
+        return [1. for _ in range(L)]
     else:
         raise ValueError()

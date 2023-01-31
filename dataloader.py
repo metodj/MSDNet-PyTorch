@@ -5,11 +5,15 @@ import torchvision.datasets as datasets
 import os
 
 
-def get_dataloaders(args):
+def get_dataloaders(args, normalize=True):
     train_loader, val_loader, test_loader = None, None, None
     if args.data == 'cifar10':
-        normalize = transforms.Normalize(mean=[0.4914, 0.4824, 0.4467],
-                                         std=[0.2471, 0.2435, 0.2616])
+        if normalize:
+            normalize = transforms.Normalize(mean=[0.4914, 0.4824, 0.4467],
+                                             std=[0.2471, 0.2435, 0.2616])
+        else:
+            normalize = transforms.Normalize(mean=[0., 0., 0.],
+                                             std=[1., 1., 1.])
         train_set = datasets.CIFAR10(args.data_root, train=True,
                                      transform=transforms.Compose([
                                         transforms.RandomCrop(32, padding=4),
@@ -23,8 +27,12 @@ def get_dataloaders(args):
                                     normalize
                                    ]))
     elif args.data == 'cifar100':
-        normalize = transforms.Normalize(mean=[0.5071, 0.4867, 0.4408],
-                                         std=[0.2675, 0.2565, 0.2761])
+        if normalize:
+            normalize = transforms.Normalize(mean=[0.5071, 0.4867, 0.4408],
+                                             std=[0.2675, 0.2565, 0.2761])
+        else:
+            normalize = transforms.Normalize(mean=[0., 0., 0.],
+                                             std=[1., 1., 1.])
         train_set = datasets.CIFAR100(args.data_root, train=True,
                                       transform=transforms.Compose([
                                         transforms.RandomCrop(32, padding=4),
@@ -41,8 +49,12 @@ def get_dataloaders(args):
         # ImageNet
         traindir = os.path.join(args.data_root, 'train')
         valdir = os.path.join(args.data_root, 'val')
-        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                         std=[0.229, 0.224, 0.225])
+        if normalize:
+            normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                             std=[0.229, 0.224, 0.225])
+        else:
+            normalize = transforms.Normalize(mean=[0., 0., 0.],
+                                             std=[1., 1., 1.])
         train_set = datasets.ImageFolder(traindir, transforms.Compose([
             transforms.RandomResizedCrop(224),
             transforms.RandomHorizontalFlip(),
