@@ -258,7 +258,7 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
                         loss += weights[j] * criterion(torch.mean(torch.stack(output[:j + 1]), dim=0), target_var)
                 if 'hybrid' in ensemble_type:
                     for j in range(1, L):
-                        loss += criterion(output[j], target_var)
+                        loss += weights[0] * criterion(output[j], target_var)
         elif likelihood == 'OVR':
             T = step_func(step)
             for j in range(L):

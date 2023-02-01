@@ -65,7 +65,7 @@ def f_probs_ovr_poe(tensor: torch.Tensor) -> torch.tensor:
     return tensor
 
 
-def f_probs_ovr_poe_break_ties(logits, probs_ovr_poe, T=1., softmax=False):
+def f_probs_ovr_poe_break_ties(logits, probs_ovr_poe, T=1., softmax=False, sigmoid=False):
     logits, probs_ovr_poe = torch.clone(logits), torch.clone(probs_ovr_poe)
     # TODO: implement without for loops
     assert len(logits.shape) == 3  # (L, N_test, C)
@@ -79,7 +79,10 @@ def f_probs_ovr_poe_break_ties(logits, probs_ovr_poe, T=1., softmax=False):
             sum_n = 0.
             for c in range(logits.shape[2]):
                 if ovr_mask[c]:
-                    sigmoid_prod = torch.sigmoid(T * logits[:l + 1, n, c]).prod()
+                    if sigmoid:
+                        sigmoid_prod = torch.sigmoid(T * logits[:l + 1, n, c]).prod()
+                    else:
+                        sigmoid_prod = (T * logits[:l + 1, n, c]).prod()
                 else:
                     sigmoid_prod = 0.
                 sum_n += sigmoid_prod
