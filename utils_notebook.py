@@ -97,6 +97,32 @@ def f_probs_ovr_poe_break_ties(logits, probs_ovr_poe, T=1., softmax=False, sigmo
     return torch.tensor(preds)
 
 
+def f_probs_ovr_break_ties(logits, probs_ovr, T=1.):
+    logits, probs_ovr = torch.clone(logits), torch.clone(probs_ovr)
+    # TODO: implement without for loops
+    assert len(logits.shape) == 3  # (L, N_test, C)
+    assert len(probs_ovr.shape) == 3  # (L, N_test, C)
+    preds = []
+    for l in range(logits.shape[0]):
+        preds_l = []
+        for n in range(logits.shape[1]):
+            ovr_mask = probs_ovr[l, n, :] > 0
+            preds_n = []
+            sum_n = 0.
+            for c in range(logits.shape[2]):
+                if ovr_mask[c]:
+                    sigmoid_prod = (T * logits[l, n, c])
+                else:
+                    sigmoid_prod = 0.
+                sum_n += sigmoid_prod
+                preds_n.append(sigmoid_prod)
+            if sum_n > 0.:
+                preds_n = [x / sum_n for x in preds_n]
+            preds_l.append(preds_n)
+        preds.append(preds_l)
+    return torch.tensor(preds)
+
+
 def f_preds_ovr_fallback_ood(probs: torch.Tensor, logits: torch.Tensor, prod: bool = False) -> torch.Tensor:
     """
     Predictions for OVR likelihood that fallback to logits when probabilities collapse to 0 (OOD)
