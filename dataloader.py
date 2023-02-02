@@ -20,12 +20,12 @@ def get_dataloaders(args, normalize=True):
                                         transforms.RandomHorizontalFlip(),
                                         transforms.ToTensor(),
                                         normalize
-                                     ]))
+                                     ]), download=True)
         val_set = datasets.CIFAR10(args.data_root, train=False,
                                    transform=transforms.Compose([
                                     transforms.ToTensor(),
                                     normalize
-                                   ]))
+                                   ]), download=True)
     elif args.data == 'cifar100':
         if normalize:
             normalize = transforms.Normalize(mean=[0.5071, 0.4867, 0.4408],
