@@ -2,6 +2,7 @@ import torch
 import numpy as np
 from typing import Dict
 import scipy
+from tqdm import tqdm
 
 
 # TODO: most of the functions below have an ugly implementation with for loops, vectorize them
@@ -71,9 +72,9 @@ def f_probs_ovr_poe_break_ties(logits, probs_ovr_poe, T=1., softmax=False, sigmo
     assert len(logits.shape) == 3  # (L, N_test, C)
     assert len(probs_ovr_poe.shape) == 3  # (L, N_test, C)
     preds = []
-    for l in range(logits.shape[0]):
+    for l in tqdm(range(logits.shape[0])):
         preds_l = []
-        for n in range(logits.shape[1]):
+        for n in tqdm(range(logits.shape[1])):
             ovr_mask = probs_ovr_poe[l, n, :] > 0
             preds_n = []
             sum_n = 0.
