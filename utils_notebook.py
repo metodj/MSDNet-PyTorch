@@ -97,6 +97,17 @@ def f_probs_ovr_poe_break_ties(logits, probs_ovr_poe, T=1., softmax=False, sigmo
         preds.append(preds_l)
     return torch.tensor(preds)
 
+# TODO: unit test checking that f_probs_ovr_poe_logits_weighted is the same as f_probs_ovr_poe_break_ties
+
+def f_probs_ovr_poe_logits_weighted(logits):
+    C = logits.shape[-1]
+    probs = logits.numpy().copy()
+    probs[probs < 0] = 0.
+    probs = np.cumprod(probs, axis=0)
+    # normalize
+    probs = (probs / np.repeat(probs.sum(axis=2)[:, :, np.newaxis], C, axis=2))
+    return probs
+
 
 def f_probs_ovr_break_ties(logits, probs_ovr, T=1.):
     logits, probs_ovr = torch.clone(logits), torch.clone(probs_ovr)
@@ -122,6 +133,15 @@ def f_probs_ovr_break_ties(logits, probs_ovr, T=1.):
             preds_l.append(preds_n)
         preds.append(preds_l)
     return torch.tensor(preds)
+
+
+def f_probs_ovr_logits_weighted(logits):
+    C = logits.shape[-1]
+    probs = logits.numpy().copy()
+    probs[probs < 0] = 0.
+    # normalize
+    probs = (probs / np.repeat(probs.sum(axis=2)[:, :, np.newaxis], C, axis=2))
+    return probs
 
 
 def f_preds_ovr_fallback_ood(probs: torch.Tensor, logits: torch.Tensor, prod: bool = False) -> torch.Tensor:
