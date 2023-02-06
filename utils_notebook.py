@@ -99,10 +99,10 @@ def f_probs_ovr_poe_break_ties(logits, probs_ovr_poe, T=1., softmax=False, sigmo
 
 # TODO: unit test checking that f_probs_ovr_poe_logits_weighted is the same as f_probs_ovr_poe_break_ties
 
-def f_probs_ovr_poe_logits_weighted(logits):
+def f_probs_ovr_poe_logits_weighted(logits, threshold=0.):
     C = logits.shape[-1]
     probs = logits.numpy().copy()
-    probs[probs < 0] = 0.
+    probs[probs < threshold] = 0.
     probs = np.cumprod(probs, axis=0)
     # normalize
     probs = (probs / np.repeat(probs.sum(axis=2)[:, :, np.newaxis], C, axis=2))
