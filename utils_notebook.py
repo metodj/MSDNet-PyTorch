@@ -193,3 +193,17 @@ def get_ood_ovr(_probs: torch.Tensor, L: int = 7) -> Dict:
             if nr_non_zero == 0:
                 ood_dict_ids[l].append(n)
     return ood_dict_ids
+
+
+def f_probs_ovr_poe_logits_weighted_generalized(logits, threshold=0., weights=None):
+    L, C = logits.shape[0], logits.shape[-1]
+    probs = logits.numpy().copy()
+    probs[probs < threshold] = 0.
+    if weights is not None:
+        assert logits.shape[0] == weights.shape[0]
+        for l in range(L):
+            probs[l, :, :] = probs[l, :, :] ** weights[l]
+    probs = np.cumprod(probs, axis=0)
+    # normalize
+    probs = (probs / np.repeat(probs.sum(axis=2)[:, :, np.newaxis], C, axis=2))
+    return probs
