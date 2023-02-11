@@ -358,8 +358,6 @@ def get_logits_targets_image_net(step=4):
         ARGS.nScales = len(ARGS.grFactor)
         MODEL_PATH = f"image_net/msdnet-step=7-block=5.pth.tar"
 
-    DATA_PATH = "data/image_net/valid/"
-
     # load pre-trained model
     model = MSDNet(args=ARGS)
     state = torch.load(MODEL_PATH)
@@ -374,6 +372,35 @@ def get_logits_targets_image_net(step=4):
     model_parameters = filter(lambda p: p.requires_grad, model.parameters())
     params = sum([np.prod(p.size()) for p in model_parameters])
     print(f"nr. of trainable params: {params}")
+
+    val_loader =get_image_net_val_loader(ARGS)
+
+    logits = []
+    targets = []
+    with torch.no_grad():
+        for i, (x, y) in tqdm(enumerate(val_loader)):
+            y = y.cuda(device=None)
+            x = x.cuda()
+
+            input_var = torch.autograd.Variable(x)
+            target_var = torch.autograd.Variable(y)
+
+            output = model(input_var)
+            if not isinstance(output, list):
+                output = [output]
+
+            logits.append(torch.stack(output))
+            targets.append(target_var)
+
+    logits = torch.cat(logits, dim=1).cpu()
+    targets = torch.cat(targets).cpu()
+
+    return logits, targets, ARGS
+
+
+def get_image_net_val_loader(ARGS):
+
+    DATA_PATH = "data/image_net/valid/"
 
     normalize = transforms.Normalize(
         mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
@@ -399,27 +426,7 @@ def get_logits_targets_image_net(step=4):
         pin_memory=True,
     )
 
-    logits = []
-    targets = []
-    with torch.no_grad():
-        for i, (x, y) in tqdm(enumerate(val_loader)):
-            y = y.cuda(device=None)
-            x = x.cuda()
-
-            input_var = torch.autograd.Variable(x)
-            target_var = torch.autograd.Variable(y)
-
-            output = model(input_var)
-            if not isinstance(output, list):
-                output = [output]
-
-            logits.append(torch.stack(output))
-            targets.append(target_var)
-
-    logits = torch.cat(logits, dim=1).cpu()
-    targets = torch.cat(targets).cpu()
-
-    return logits, targets, ARGS
+    return val_loader
 
 
 def get_scale_probs(probs_name_arr, probs_arr, T_arr, targets, C, L):
