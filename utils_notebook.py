@@ -456,3 +456,37 @@ def probs_decrease(probs: np.array) -> np.array:
         for j in range(i + 1, L):
             diffs.append(probs[j] - probs[i])
     return np.array(diffs)
+
+
+def get_image_net_val_loader(ARGS, normalize=True):
+
+    DATA_PATH = "data/image_net/valid/"
+
+    if normalize:
+        normalize = transforms.Normalize(
+            mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+        )
+    else:
+        normalize = transforms.Normalize(mean=[0.0, 0.0, 0.0], std=[1.0, 1.0, 1.0])
+
+    val_set = datasets.ImageFolder(
+        DATA_PATH,
+        transforms.Compose(
+            [
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+                transforms.ToTensor(),
+                normalize,
+            ]
+        ),
+    )
+
+    val_loader = torch.utils.data.DataLoader(
+        val_set,
+        batch_size=ARGS.batch_size,
+        shuffle=False,
+        num_workers=ARGS.workers,
+        pin_memory=True,
+    )
+
+    return val_loader
