@@ -11,6 +11,13 @@ Citation:
         year={2018}
     }
 
+## Environment instructions (PoE-OvR)
+```
+conda create --name msdnet python=3.8
+conda activate msdnet
+pip install -r requirements.txt
+```
+
 ## Dependencies:
 
 + Python3
