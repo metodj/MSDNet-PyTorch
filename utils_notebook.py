@@ -459,7 +459,6 @@ def probs_decrease(probs: np.array) -> np.array:
 
 
 def get_image_net_val_loader(ARGS, normalize=True):
-
     DATA_PATH = "data/image_net/valid/"
 
     if normalize:
@@ -490,3 +489,28 @@ def get_image_net_val_loader(ARGS, normalize=True):
     )
 
     return val_loader
+
+
+def change_your_mind_analysis(names, preds_change_arr, preds_arr, targets, N):
+    res_dict = {x: {} for x in names}
+    for _type, _preds_change, _preds in zip(names, preds_change_arr, preds_arr):
+        count_dict = {'no_change (corr_pred)': 0, 'no_change (incorr_pred)': 0, 'corr_to_incorr': 0, 'incorr_to_corr': 0, 'both': 0}
+        for n in range(N):
+            _preds_change_n = _preds_change[:, n]
+            if np.all(_preds_change_n == 0):
+                if _preds[n] == targets[n]:
+                    count_dict['no_change (corr_pred)'] += 1
+                else:
+                    count_dict['no_change (incorr_pred)'] += 1
+            elif -1 in _preds_change_n and 1 in _preds_change_n:
+                count_dict['both'] += 1
+            elif -1 in _preds_change_n and 1 not in _preds_change_n:
+                count_dict['incorr_to_corr'] += 1
+            elif -1 not in _preds_change_n and 1 in _preds_change_n:
+                count_dict['corr_to_incorr'] += 1
+            else:
+                raise ValueError('Should not happen')
+
+        assert sum(list(count_dict.values())) == N
+        res_dict[_type] = count_dict
+    return res_dict
