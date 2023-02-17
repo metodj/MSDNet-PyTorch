@@ -2,7 +2,7 @@ import numpy as np
 
 
 def conformalize_anytime_nn(probs, targets, calib_ids, valid_ids, C: int, L: int, conf_type='smx', alpha=0.05):
-    assert conf_type in ['smx', 'asp', 'rankings'] 
+    assert conf_type in ['smx', 'aps', 'rankings'] 
     sizes, coverages = [], []
     for l in range(L):
         cal_smx = probs[l, calib_ids, :]
@@ -19,7 +19,7 @@ def conformalize_anytime_nn(probs, targets, calib_ids, valid_ids, C: int, L: int
             cal_scores = 1-cal_smx[np.arange(n), cal_labels]
             qhat = np.quantile(cal_scores, q_level, method='higher')
             conformal_sets = val_smx >= (1-qhat)
-        elif conf_type == 'asp':
+        elif conf_type == 'aps':
             cal_pi = cal_smx.argsort(1)[:,::-1]; cal_srt = np.take_along_axis(cal_smx,cal_pi,axis=1).cumsum(axis=1) 
             cal_scores = np.take_along_axis(cal_srt,cal_pi.argsort(axis=1),axis=1)[range(n),cal_labels]
             qhat = np.quantile(cal_scores, q_level, interpolation='higher')
