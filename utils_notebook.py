@@ -142,6 +142,23 @@ def f_probs_ovr_poe_logits_weighted(logits, threshold=0.0):
     probs = probs / np.repeat(probs.sum(axis=2)[:, :, np.newaxis], C, axis=2)
     return probs
 
+def f_probs_ovr_poe_logits_softmax(logits, L, threshold=0.0):
+    C = logits.shape[-1]
+    _logits = logits.numpy().copy()
+    _logits[_logits < threshold] = 0.0
+    mask = np.cumprod(_logits, axis=0)  > 0.
+
+    _logits = np.cumsum(_logits, axis=0)
+    # _logits = np.cumsum(_logits, axis=0) / np.array([float(i) for i in range(1, L + 1)])[:, None, None]
+    # _logits = np.cumprod(_logits, axis=0) 
+
+    probs = np.zeros(mask.shape)
+    for l in range(L):
+        for n in range(N):
+            probs[l, n, mask[l, n, :]] = scipy.special.softmax(_logits[l, n, mask[l, n, :]])
+
+    return probs
+
 
 def f_probs_ovr_break_ties(logits, probs_ovr, T=1.0):
     logits, probs_ovr = torch.clone(logits), torch.clone(probs_ovr)
@@ -569,3 +586,44 @@ def modal_probs_decreasing_relative(
         -1.0 * k: ((N - v) / N) * 100 for k, v in nr_non_decreasing.items()
     }
     return nr_decreasing
+
+
+def f_probs_ovr_poe_logits_sigmoid(logits, threshold=0.0, min_max_norm=True):
+    C = logits.shape[-1]
+    _logits = logits.numpy().copy()
+    _logits[_logits < threshold] = 0.0
+    mask = np.cumprod(_logits, axis=0)  > 0.
+
+    probs = np.zeros(mask.shape)
+    for l in range(L):
+        for n in range(N):
+            _mask_l_n = mask[l, n, :]
+            _logits_l_n = _logits[l, n, _mask_l_n]
+            if min_max_norm:
+                _logits_l_n = (_logits_l_n - _logits_l_n.min()) / (_logits_l_n.max() - _logits_l_n.min())  # for numerical stability
+            probs[l, n, _mask_l_n] = scipy.special.expit(_logits_l_n)  # sigmoid
+            
+    probs = np.cumprod(probs, axis=0)
+    # normalize
+    probs = probs / np.repeat(probs.sum(axis=2)[:, :, np.newaxis], C, axis=2)
+    return probs
+
+
+def f_probs_ovr_poe_logits_sigmoid_log_probs(logits, threshold=0.0):
+    _logits = logits.numpy().copy()  # (L, N, C)
+    _logits[_logits < threshold] = 0.0
+    mask = np.cumprod(_logits, axis=0)  > 0.
+
+    probs = np.zeros(mask.shape)
+    for l in range(L):
+        for n in range(N):
+            _mask_l_n = mask[l, n, :]
+            _logits_l_n = _logits[:l + 1, n, _mask_l_n]
+            _logits_l_n = -np.log(1. + np.exp(-_logits_l_n)).sum(axis=0)  # sum over L
+            c_arr = []
+            for c in range(len(_logits_l_n)):
+                _logits_l_n_c = scipy.special.logsumexp(_logits_l_n - _logits_l_n[c])  # sum over C
+                c_arr.append(np.exp(-_logits_l_n_c))
+            probs[l, n, _mask_l_n] = c_arr
+            
+    return probs
