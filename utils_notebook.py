@@ -143,7 +143,7 @@ def f_probs_ovr_poe_logits_weighted(logits, threshold=0.0):
     return probs
 
 def f_probs_ovr_poe_logits_softmax(logits, L, threshold=0.0):
-    C = logits.shape[-1]
+    L, N, _ = logits.shape
     _logits = logits.numpy().copy()
     _logits[_logits < threshold] = 0.0
     mask = np.cumprod(_logits, axis=0)  > 0.
@@ -611,6 +611,7 @@ def f_probs_ovr_poe_logits_sigmoid(logits, threshold=0.0, min_max_norm=True):
 
 def f_probs_ovr_poe_logits_sigmoid_log_probs(logits, threshold=0.0):
     _logits = logits.numpy().copy()  # (L, N, C)
+    L, N, _ =  _logits.shape
     _logits[_logits < threshold] = 0.0
     mask = np.cumprod(_logits, axis=0)  > 0.
 
