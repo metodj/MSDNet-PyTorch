@@ -22,14 +22,15 @@ def modal_probs_decreasing(
     N: int = 10000,
     diffs_type: str = "consecutive",
     thresholds: List[float] = [-0.01, -0.05, -0.1, -0.2, -0.5],
+    return_ids: bool = False
 ) -> Dict[float, float]:
     """
     nr. of decreasing modal probability vectors in anytime-prediction regime
 
-    function can also be used for grount truth probabilities, set layer=None
+    function can also be used for ground truth probabilities, set layer=None
     """
     nr_non_decreasing = {threshold: 0 for threshold in thresholds}
-    # diffs = []
+    diffs = {threshold: [] for threshold in thresholds}
     for i in range(N):
         if layer is None:
             c = _preds[i]
@@ -47,6 +48,7 @@ def modal_probs_decreasing(
             if np.all(diffs_i >= threshold):
                 nr_non_decreasing[threshold] += 1
             else:
+                diffs[threshold].append(i)
                 if verbose:
                     print(i, probs_i)
     # print(nr_non_decreasing)
@@ -54,7 +56,10 @@ def modal_probs_decreasing(
     nr_decreasing = {
         -1.0 * k: ((N - v) / N) * 100 for k, v in nr_non_decreasing.items()
     }
-    return nr_decreasing
+    if return_ids:
+        return nr_decreasing, diffs
+    else:
+        return nr_decreasing
 
 
 def modal_probs_average(
@@ -148,8 +153,8 @@ def f_probs_ovr_poe_logits_softmax(logits, L, threshold=0.0):
     _logits[_logits < threshold] = 0.0
     mask = np.cumprod(_logits, axis=0)  > 0.
 
-    _logits = np.cumsum(_logits, axis=0)
-    # _logits = np.cumsum(_logits, axis=0) / np.array([float(i) for i in range(1, L + 1)])[:, None, None]
+    # _logits = np.cumsum(_logits, axis=0)
+    _logits = np.cumsum(_logits, axis=0) / np.array([float(i) for i in range(1, L + 1)])[:, None, None]
     # _logits = np.cumprod(_logits, axis=0) 
 
     probs = np.zeros(mask.shape)
