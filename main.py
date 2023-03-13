@@ -79,7 +79,7 @@ def main():
         'project': 'anytime-poe-msdnet',
         'entity': 'metodj',
         'notes': '',
-        'mode': 'online',
+        'mode': 'offline',
         'config': vars(args)
     }
     with wandb.init(**wandb_kwargs) as run:
@@ -162,6 +162,8 @@ def main():
             run.log({'T': T})
             run.log({'lr': lr})
 
+            return
+
             val_loss, val_prec1, val_prec5 = validate(val_loader, model, criterion,
                                                       args.num_classes, args.likelihood, _step, fun_schedule_T)
 
@@ -234,6 +236,12 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
         output = model(input_var)
         if not isinstance(output, list):
             output = [output]
+
+        print('banana')
+        print(len(output))
+        print(target_var.shape)
+        print(output[0].shape)
+        return 0
 
         loss = 0.0
         L = len(output)
