@@ -249,7 +249,8 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
                 print(weights)
                 for j in range(L):
                     if mono_penal and j > 0:
-                        loss += weights[j] * (criterion(output[j], target_var) + mono_penal * criterion(1. - output[j - 1], target_var) * criterion(output[j], target_var))
+                        # stop gradients on output[j - 1]
+                        loss += weights[j] * (criterion(output[j], target_var) + mono_penal * criterion(1. - output[j - 1].detach(), target_var) * criterion(output[j], target_var))
                     else:
                         loss += weights[j] * criterion(output[j], target_var)
             if 'PoE' in ensemble_type or ensemble_type == 'hybrid':
