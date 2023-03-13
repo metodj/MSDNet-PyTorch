@@ -151,7 +151,7 @@ def main():
                 grad_mean, grad_std = train(train_loader, model, criterion, optimizer, epoch,
                                                            args.num_classes, args.likelihood, _step,
                                                            fun_schedule_T, args.alpha, args.ensemble_type, 
-                                                           train_prec1, args.C_mono)
+                                                           train_prec1, C_mono=args.C_mono, mono_penal=args.mono_penal)
             run.log({'train_loss': train_loss.avg})
             run.log({'train_prec1': train_prec1[-1].avg})
             for j in range(args.nBlocks):
@@ -199,7 +199,7 @@ def main():
         return
 
 def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelihood, step, step_func=None, 
-          alpha=0., ensemble_type="DE", train_prec1=None, C_mono=0.):
+          alpha=0., ensemble_type="DE", train_prec1=None, C_mono=0., mono_penal=0.):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -243,12 +243,15 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
             T = 1.
             if ensemble_type == 'DE' or ensemble_type == 'hybrid':
                 if C_mono:
-                    weights = get_mono_weights(output, target_var)
+                    weights = get_mono_weights(output, target_var, C_mono=C_mono)
                 else: 
                     weights = torch.ones(L)
                 print(weights)
                 for j in range(L):
-                   loss += weights[j] * criterion(output[j], target_var)
+                    if mono_penal and j > 0:
+                        loss += weights[j] * (criterion(output[j], target_var) + mono_penal * criterion(1. - output[j - 1], target_var) * criterion(output[j], target_var))
+                    else:
+                        loss += weights[j] * criterion(output[j], target_var)
             if 'PoE' in ensemble_type or ensemble_type == 'hybrid':
                 prod_loss_multp = alpha * L
                 if 'depth-weights' in ensemble_type:

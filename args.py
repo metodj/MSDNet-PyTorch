@@ -96,6 +96,7 @@ poe_group = arg_parser.add_argument_group('poe',
 poe_group.add_argument('--likelihood', default='softmax', type=str, choices=['softmax', 'OVR'])
 poe_group.add_argument('--ensemble_type', default='DE', type=str, choices=['DE', 'PoE', 'PoE-depth-weights', 'hybrid', 'cascade', 'cascade-hybrid'])
 poe_group.add_argument('--C_mono', default=0.0, type=float)
+poe_group.add_argument('--mono_penal', default=0.0, type=float)
 # schedule T params are only relevant when OVR likelihood is used
 poe_group.add_argument('--schedule_T_type', default='sigmoid', type=str, choices=['sigmoid', 'constant'])
 poe_group.add_argument('--schedule_T_start', default=2.0, type=float)
