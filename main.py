@@ -16,7 +16,7 @@ from args import arg_parser
 from adaptive_inference import dynamic_evaluate
 import models
 from op_counter import measure_model
-from utils_poe import schedule_T, get_prod_loss, get_grad_stats, get_depth_weighted_logits, get_cascade_dynamic_weights
+from utils_poe import schedule_T, get_prod_loss, get_grad_stats, get_depth_weighted_logits, get_cascade_dynamic_weights, get_mono_weights
 from utils import AverageMeter
 
 args = arg_parser.parse_args()
@@ -79,7 +79,7 @@ def main():
         'project': 'anytime-poe-msdnet',
         'entity': 'metodj',
         'notes': '',
-        'mode': 'offline',
+        'mode': 'online',
         'config': vars(args)
     }
     with wandb.init(**wandb_kwargs) as run:
@@ -150,7 +150,8 @@ def main():
                 T, train_loss_ind, train_loss_prod, \
                 grad_mean, grad_std = train(train_loader, model, criterion, optimizer, epoch,
                                                            args.num_classes, args.likelihood, _step,
-                                                           fun_schedule_T, args.alpha, args.ensemble_type, train_prec1)
+                                                           fun_schedule_T, args.alpha, args.ensemble_type, 
+                                                           train_prec1, args.C_mono)
             run.log({'train_loss': train_loss.avg})
             run.log({'train_prec1': train_prec1[-1].avg})
             for j in range(args.nBlocks):
@@ -161,8 +162,6 @@ def main():
             run.log({'grad_std': grad_std})
             run.log({'T': T})
             run.log({'lr': lr})
-
-            return
 
             val_loss, val_prec1, val_prec5 = validate(val_loader, model, criterion,
                                                       args.num_classes, args.likelihood, _step, fun_schedule_T)
@@ -199,7 +198,8 @@ def main():
 
         return
 
-def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelihood, step, step_func=None, alpha=0., ensemble_type="DE", train_prec1=None):
+def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelihood, step, step_func=None, 
+          alpha=0., ensemble_type="DE", train_prec1=None, C_mono=0.):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -237,19 +237,18 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
         if not isinstance(output, list):
             output = [output]
 
-        print('banana')
-        print(len(output))
-        print(target_var.shape)
-        print(output[0].shape)
-        return 0
-
         loss = 0.0
         L = len(output)
         if likelihood == 'softmax':
             T = 1.
             if ensemble_type == 'DE' or ensemble_type == 'hybrid':
+                if C_mono:
+                    weights = get_mono_weights(output, target_var)
+                else: 
+                    weights = torch.ones(L)
+                print(weights)
                 for j in range(L):
-                   loss += criterion(output[j], target_var)
+                   loss += weights[j] * criterion(output[j], target_var)
             if 'PoE' in ensemble_type or ensemble_type == 'hybrid':
                 prod_loss_multp = alpha * L
                 if 'depth-weights' in ensemble_type:

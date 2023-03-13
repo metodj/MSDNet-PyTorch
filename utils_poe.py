@@ -55,3 +55,26 @@ def get_cascade_dynamic_weights(train_prec: Union[List[AverageMeter], None], L: 
         return [1. for _ in range(L)]
     else:
         raise ValueError()
+    
+
+def get_mono_weights(output: List[torch.Tensor], targets: torch.Tensor, C_base: float = 1., C_mono: float = 1.) -> torch.Tensor:
+    """
+    stop gradient is implemented to avoid backpropagating through the weights
+
+    stop gradient is implemented via .detach : 
+        https://stackoverflow.com/questions/51529974/tensorflow-stop-gradient-equivalent-in-pytorch
+    """
+    _output = [o.detach() for o in output]  # stop gradient
+    L = len(_output)
+    b = _output[0].shape[0]
+    w =  b * torch.ones(L, device=_output[0].device)
+
+    w[0] *= C_base
+    for l in range(1, L):
+        _preds_prev, _preds = torch.argmax(_output[l - 1], dim=1), torch.argmax(_output[l], dim=1)
+        mask = (_preds_prev == targets) & (_preds != targets)
+        w[l] += mask.sum() * C_mono
+
+    w = w / b
+    return w
+
