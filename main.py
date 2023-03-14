@@ -16,7 +16,7 @@ from args import arg_parser
 from adaptive_inference import dynamic_evaluate
 import models
 from op_counter import measure_model
-from utils_poe import schedule_T, get_prod_loss, get_grad_stats, get_depth_weighted_logits, get_cascade_dynamic_weights, get_mono_weights
+from utils_poe import schedule_T, get_prod_loss, get_grad_stats, get_depth_weighted_logits, get_cascade_dynamic_weights, get_mono_weights, cross_entropy_loss_manual
 from utils import AverageMeter
 
 args = arg_parser.parse_args()
@@ -250,9 +250,10 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
                     if mono_penal and j > 0:
                         if stop_grad:
                             # stop gradients on output[j - 1]
-                            loss += weights[j] * (criterion(output[j], target_var) + mono_penal * criterion(1. - output[j - 1].detach(), target_var) * criterion(output[j], target_var))
+                            
+                            loss += weights[j] * (criterion(output[j], target_var) + mono_penal * cross_entropy_loss_manual(logits=output[j - 1], labels=target_var, stop_grad=True) * criterion(output[j], target_var))
                         else:
-                            loss += weights[j] * (criterion(output[j], target_var) + mono_penal * criterion(1. - output[j - 1], target_var) * criterion(output[j], target_var))
+                            loss += weights[j] * (criterion(output[j], target_var) + mono_penal * cross_entropy_loss_manual(logits=output[j - 1], labels=target_var, stop_grad=False) * criterion(output[j], target_var))
                     else:
                         loss += weights[j] * criterion(output[j], target_var)
             if 'PoE' in ensemble_type or ensemble_type == 'hybrid':
