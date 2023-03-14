@@ -271,8 +271,9 @@ def f_probs_ovr_poe_logits_weighted_generalized(logits, threshold=0.0, weights=N
     return probs
 
 
-def get_logits_targets(dataset, model_folder, likelihood, epoch, cuda=True):
+def get_logits_targets(dataset, model_folder, likelihood, epoch, cuda=True, logits_type: str = 'test'):
     assert dataset in ["cifar10", "cifar100"]
+    assert logits_type in ['train', 'test']
     ARGS = parse_args()
     ARGS.data_root = "data"
     ARGS.data = dataset
@@ -310,12 +311,17 @@ def get_logits_targets(dataset, model_folder, likelihood, epoch, cuda=True):
     model.eval()
 
     # data
-    _, _, test_loader = get_dataloaders(ARGS)
+    if logits_type == 'test':
+        _, _, _loader = get_dataloaders(ARGS)
+    elif logits_type == 'train':
+        _loader, _, _ = get_dataloaders(ARGS)
+    else:
+        raise ValueError(f'logits_type={logits_type} not supported')
 
     logits = []
     targets = []
     with torch.no_grad():
-        for i, (x, y) in enumerate(test_loader):
+        for i, (x, y) in enumerate(_loader):
             if cuda:
                 y = y.cuda(device=None)
                 x = x.cuda()
