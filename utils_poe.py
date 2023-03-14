@@ -79,7 +79,7 @@ def get_mono_weights(output: List[torch.Tensor], targets: torch.Tensor, C_base: 
     return w
 
 
-def cross_entropy_loss_manual(logits: torch.Tensor, targets: torch.Tensor, loss_type: str = 'original', reduction: str = 'mean', stop_grad: bool = True) -> torch.Tensor:
+def cross_entropy_loss_manual(logits: torch.Tensor, targets: torch.Tensor, loss_type: str = 'one_minus', reduction: str = 'mean', stop_grad: bool = True) -> torch.Tensor:
     """
     Computes cross entropy loss with reversed probabilities
     """
