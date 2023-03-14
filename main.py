@@ -251,9 +251,9 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
                         if stop_grad:
                             # stop gradients on output[j - 1]
                             
-                            loss += weights[j] * (criterion(output[j], target_var) + mono_penal * cross_entropy_loss_manual(logits=output[j - 1], labels=target_var, stop_grad=True) * criterion(output[j], target_var))
+                            loss += weights[j] * (criterion(output[j], target_var) + mono_penal * cross_entropy_loss_manual(logits=output[j - 1], targets=target_var, stop_grad=True) * criterion(output[j], target_var))
                         else:
-                            loss += weights[j] * (criterion(output[j], target_var) + mono_penal * cross_entropy_loss_manual(logits=output[j - 1], labels=target_var, stop_grad=False) * criterion(output[j], target_var))
+                            loss += weights[j] * (criterion(output[j], target_var) + mono_penal * cross_entropy_loss_manual(logits=output[j - 1], targets=target_var, stop_grad=False) * criterion(output[j], target_var))
                     else:
                         loss += weights[j] * criterion(output[j], target_var)
             if 'PoE' in ensemble_type or ensemble_type == 'hybrid':
