@@ -269,7 +269,7 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
                         loss += weights[j] * criterion(output[j], target_var)
                     else:
                         if stop_grad:
-                            loss += weights[j] * criterion(torch.mean(torch.stack([x.detach() for x in output[:j]] + output[j]), dim=0), target_var)
+                            loss += weights[j] * criterion(torch.mean(torch.stack([x.detach() for x in output[:j]] + [output[j]]), dim=0), target_var)
                         else:
                             loss += weights[j] * criterion(torch.mean(torch.stack(output[:j + 1]), dim=0), target_var)
                 if 'hybrid' in ensemble_type:
