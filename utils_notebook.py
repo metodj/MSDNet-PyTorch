@@ -9,6 +9,7 @@ from utils import parse_args
 from collections import OrderedDict
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
+from collections import OrderedDict, Counter
 
 
 # TODO: most of the functions below have an ugly implementation with for loops, vectorize them
@@ -644,3 +645,15 @@ def f_probs_ovr_poe_logits_sigmoid_log_probs(logits, threshold=0.0):
             probs[l, n, _mask_l_n] = c_arr
             
     return probs
+
+
+def measure_forgetting(preds, targets, L, N):
+    forget_ids = []
+    for n in range(N):
+        for l in range(1, L):
+
+            if preds[l][n] != targets[n] and preds[l - 1][n] == targets[n]:
+                forget_ids.append((n, l))
+                break
+
+    return [(x / N) * 100 for x in list(Counter([x[1] + 1 for x in forget_ids]).values())]
