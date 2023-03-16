@@ -657,3 +657,21 @@ def measure_forgetting(preds, targets, L, N):
                 break
 
     return [(x / N) * 100 for x in list(Counter([x[1] + 1 for x in forget_ids]).values())]
+
+
+def get_probs_ovr_poe_w_adaptive_threshold(logits: torch.Tensor, weights: torch.Tensor, metric: str = 'top_2_logits', thres_metric: float = 4., 
+                                          thres_hard: float = 0., thres_easy: float = 10.) -> torch.Tensor:
+    """
+    TODO: Add fallback to logits in case of a collapse to zero distribution
+    """
+    if metric == 'top_2_logits':
+        top_logits = torch.topk(logits, 2, dim=1).values
+        l = 0  # we look at the first early exit
+        measure = top_logits[l, 0] - top_logits[l, 1] 
+    else:
+        raise NotImplementedError()
+
+    if  measure > thres_metric:
+        return f_probs_ovr_poe_logits_weighted_generalized(logits[:, None, :], threshold=thres_easy, weights=weights)
+    else:
+        return f_probs_ovr_poe_logits_weighted_generalized(logits[:, None, :], threshold=thres_hard, weights=weights)
