@@ -659,8 +659,30 @@ def measure_forgetting(preds, targets, L, N):
     return [(x / N) * 100 for x in list(Counter([x[1] + 1 for x in forget_ids]).values())]
 
 
+def f_probs_ovr_poe_logits_weighted_generalized_break_ties(logits, threshold=0.0, weights=None):
+    L, N, C = logits.shape[0], logits.shape[1], logits.shape[2]
+    probs = logits.numpy().copy()
+    probs[probs < threshold] = 0.0
+    if weights is not None:
+        assert logits.shape[0] == weights.shape[0]
+        for l in range(L):
+            probs[l, :, :] = probs[l, :, :] ** weights[l]
+    probs = np.cumprod(probs, axis=0)
+    # normalize
+    for l in range(L):
+        for n in range(N):
+            sum_l_n = probs[l, n, :].sum()
+            if sum_l_n > 0.:
+                probs[l, n, :] = probs[l, n, :] / sum_l_n
+            else:
+                # probs[l, n, :] = (1 / C) * torch.ones(C)
+                # probs[l, n, :] = torch.zeros(C)
+                probs[l, n, :] = torch.softmax(logits[l, n, :], dim=0)
+                # probs[l, n, :] = (logits[:l + 1, n, :] > 0).sum(axis=0) / (logits[:l + 1, n, :] > 0).sum()
+    return probs
+
 def get_probs_ovr_poe_w_adaptive_threshold(logits: torch.Tensor, weights: torch.Tensor, metric: str = 'top_2_logits', thres_metric: float = 4., 
-                                          thres_hard: float = 0., thres_easy: float = 10.) -> torch.Tensor:
+                                          thres_hard: float = 0., thres_easy: float = 10., break_ties: bool = True) -> torch.Tensor:
     """
     TODO: Add fallback to logits in case of a collapse to zero distribution
     """
@@ -672,6 +694,11 @@ def get_probs_ovr_poe_w_adaptive_threshold(logits: torch.Tensor, weights: torch.
         raise NotImplementedError()
 
     if  measure > thres_metric:
-        return f_probs_ovr_poe_logits_weighted_generalized(logits[:, None, :], threshold=thres_easy, weights=weights)
+        _thres = thres_easy
     else:
-        return f_probs_ovr_poe_logits_weighted_generalized(logits[:, None, :], threshold=thres_hard, weights=weights)
+        _thres = thres_hard
+    
+    if break_ties:
+        return f_probs_ovr_poe_logits_weighted_generalized_break_ties(logits[:, None, :], threshold=_thres, weights=weights)
+    else:
+        return f_probs_ovr_poe_logits_weighted_generalized(logits[:, None, :], threshold=_thres, weights=weights)
