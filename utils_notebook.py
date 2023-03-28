@@ -10,6 +10,7 @@ from collections import OrderedDict
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 from collections import OrderedDict, Counter
+from sklearn.linear_model import LogisticRegression
 
 
 # TODO: most of the functions below have an ugly implementation with for loops, vectorize them
@@ -274,7 +275,7 @@ def f_probs_ovr_poe_logits_weighted_generalized(logits, threshold=0.0, weights=N
 
 def get_logits_targets(dataset, model_folder, likelihood, epoch, cuda=True, logits_type: str = 'test'):
     assert dataset in ["cifar10", "cifar100"]
-    assert logits_type in ['train', 'test']
+    assert logits_type in ['train', 'test', 'val']
     ARGS = parse_args()
     ARGS.data_root = "data"
     ARGS.data = dataset
@@ -314,7 +315,7 @@ def get_logits_targets(dataset, model_folder, likelihood, epoch, cuda=True, logi
     # data
     if logits_type == 'test':
         _, _, _loader = get_dataloaders(ARGS)
-    if logits_type == 'val':
+    elif logits_type == 'val':
         _, _loader, _ = get_dataloaders(ARGS)
     elif logits_type == 'train':
         _loader, _, _ = get_dataloaders(ARGS)
@@ -704,3 +705,48 @@ def get_probs_ovr_poe_w_adaptive_threshold(logits: torch.Tensor, weights: torch.
         return f_probs_ovr_poe_logits_weighted_generalized_break_ties(logits[:, None, :], threshold=_thres, weights=weights)
     else:
         return f_probs_ovr_poe_logits_weighted_generalized(logits[:, None, :], threshold=_thres, weights=weights)
+
+
+def get_probs_ovr_poe_w_adapt_thres_log_reg(logits: torch.Tensor, weights: torch.Tensor, 
+                                            clf: LogisticRegression, C: float, break_ties: bool = True) -> torch.Tensor:
+    """
+    TODO: Add fallback to logits in case of a collapse to zero distribution
+
+    here we assume logits have shape (L, C), i.e. we have only one example
+    """
+    l = 0  # we look at the first early exit
+    top_logits = torch.topk(logits[l], 2).values.numpy()
+    
+    thres = clf.predict_proba(top_logits.reshape(1, -1))[:, 1] * C
+    thres = thres[0]  # flatten
+    
+    if break_ties:
+        return f_probs_ovr_poe_logits_weighted_generalized_break_ties(logits[:, None, :], threshold=thres, weights=weights)
+    else:
+        return f_probs_ovr_poe_logits_weighted_generalized(logits[:, None, :], threshold=thres, weights=weights)
+
+
+def grid_search_adapt_thres(_logits, _targets, clf, c_arr=[0., 5., 10., 15., 20.]):
+
+    L, N = len(_logits), len(_logits[0])
+
+    C_dict = {}
+    for c in c_arr:
+        probs_poe_ovr_adapt_thres = np.concatenate([np.nan_to_num(get_probs_ovr_poe_w_adapt_thres_log_reg(
+                                                                                                        logits=_logits[:, n, :], 
+                                                                                                        weights=(np.arange(1, L + 1, 1, dtype=float) / L), 
+                                                                                                        clf=clf, 
+                                                                                                        C=c)
+                                                                ) for n in range(N)], axis=1)
+        probs_poe_ovr_adapt_thres = torch.tensor(probs_poe_ovr_adapt_thres)
+        preds_poe_ovr_adapt_thres = {i: torch.argmax(probs_poe_ovr_adapt_thres, dim=2)[i, :] for i in range(L)}
+        acc_poe_ovr_adapt_thres = [(_targets == preds_poe_ovr_adapt_thres[i]).sum() / len(_targets) for i in range(L)]
+        C_dict[c] = (probs_poe_ovr_adapt_thres, preds_poe_ovr_adapt_thres, acc_poe_ovr_adapt_thres)
+
+    probs = torch.softmax(_logits, dim=2)
+    preds = {i: torch.argmax(probs, dim=2)[i, :] for i in range(L)}
+    acc = [(_targets == preds[i]).sum() / len(_targets) for i in range(L)]
+
+    C_dict['base'] = (probs, preds, acc)
+
+    return C_dict
