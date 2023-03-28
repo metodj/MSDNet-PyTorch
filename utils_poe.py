@@ -101,4 +101,11 @@ def cross_entropy_loss_manual(logits: torch.Tensor, targets: torch.Tensor, loss_
         raise ValueError()
     
 
+def get_temp_diff_labels(target_var: torch.Tensor, output: List[torch.Tensor], temp_diff: bool) -> List[torch.Tensor]:
+    if temp_diff:
+        return [out.argmax(dim=1).detach() for out in output[1:]] + [target_var]
+    else:
+        return [target_var for _ in range(len(output))]
+    
+
 

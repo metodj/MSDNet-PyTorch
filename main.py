@@ -16,7 +16,7 @@ from args import arg_parser
 from adaptive_inference import dynamic_evaluate
 import models
 from op_counter import measure_model
-from utils_poe import schedule_T, get_prod_loss, get_grad_stats, get_depth_weighted_logits, get_cascade_dynamic_weights, get_mono_weights, cross_entropy_loss_manual
+from utils_poe import schedule_T, get_grad_stats, get_temp_diff_labels
 from utils import AverageMeter
 
 args = arg_parser.parse_args()
@@ -79,7 +79,7 @@ def main():
         'project': 'anytime-poe-msdnet',
         'entity': 'metodj',
         'notes': '',
-        'mode': 'offline',
+        'mode': 'online',
         'config': vars(args)
     }
     with wandb.init(**wandb_kwargs) as run:
@@ -151,8 +151,9 @@ def main():
                 grad_mean, grad_std = train(train_loader, model, criterion, optimizer, epoch,
                                                            args.num_classes, args.likelihood, _step,
                                                            fun_schedule_T, args.alpha, args.ensemble_type, 
-                                                           train_prec1, C_mono=args.C_mono, mono_penal=args.mono_penal, stop_grad=args.stop_grad)
-            return
+                                                           train_prec1, C_mono=args.C_mono, mono_penal=args.mono_penal, 
+                                                           stop_grad=args.stop_grad, temp_diff=args.temp_diff)
+        
             run.log({'train_loss': train_loss.avg})
             run.log({'train_prec1': train_prec1[-1].avg})
             for j in range(args.nBlocks):
@@ -200,7 +201,7 @@ def main():
         return
 
 def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelihood, step, step_func=None, 
-          alpha=0., ensemble_type="DE", train_prec1=None, C_mono=0., mono_penal=0., stop_grad=False):
+          alpha=0., ensemble_type="DE", train_prec1=None, C_mono=0., mono_penal=0., stop_grad=False, temp_diff=False):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -237,68 +238,15 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
         output = model(input_var)
         if not isinstance(output, list):
             output = [output]
-
-        print('output', output[0].shape)
-        print('target', target_var.shape)
-        print('output', len(output))
-        print(type(target_var))
-        print(type(output[0]))
-        return
+    
+        target_var = get_temp_diff_labels(target_var, output, temp_diff)
 
         loss = 0.0
         L = len(output)
-        if likelihood == 'softmax':
-            T = 1.
-            if ensemble_type == 'DE' or ensemble_type == 'hybrid':
-                if C_mono:
-                    weights = get_mono_weights(output, target_var, C_mono=C_mono)
-                else: 
-                    weights = torch.ones(L)
-                for j in range(L):
-                    if mono_penal and j > 0:
-                        if stop_grad:
-                            # stop gradients on output[j - 1]
-                            
-                            loss += weights[j] * (criterion(output[j], target_var) + mono_penal * cross_entropy_loss_manual(logits=output[j - 1], targets=target_var, stop_grad=True) * criterion(output[j], target_var))
-                        else:
-                            loss += weights[j] * (criterion(output[j], target_var) + mono_penal * cross_entropy_loss_manual(logits=output[j - 1], targets=target_var, stop_grad=False) * criterion(output[j], target_var))
-                    else:
-                        loss += weights[j] * criterion(output[j], target_var)
-            if 'PoE' in ensemble_type or ensemble_type == 'hybrid':
-                prod_loss_multp = alpha * L
-                if 'depth-weights' in ensemble_type:
-                    loss += prod_loss_multp * criterion(torch.mean(torch.stack(get_depth_weighted_logits(output, L)), dim=0), target_var)
-                else:
-                    loss += prod_loss_multp * criterion(torch.mean(torch.stack(output), dim=0), target_var)
-            if 'cascade' in ensemble_type :
-                weights = get_cascade_dynamic_weights(train_prec1, L, weight_type='uniform')
-                if i == 0: print(weights)
-                for j in range(L):
-                    if j == 0:
-                        loss += weights[j] * criterion(output[j], target_var)
-                    else:
-                        if stop_grad:
-                            loss += weights[j] * criterion(torch.mean(torch.stack([x.detach() for x in output[:j]] + [output[j]]), dim=0), target_var)
-                        else:
-                            loss += weights[j] * criterion(torch.mean(torch.stack(output[:j + 1]), dim=0), target_var)
-                if 'hybrid' in ensemble_type:
-                    for j in range(1, L):
-                        loss += weights[0] * criterion(output[j], target_var)
-        elif likelihood == 'OVR':
-            T = step_func(step)
-            for j in range(L):
-                loss += criterion(T * output[j], nn.functional.one_hot(target_var, num_classes=num_classes).float())
-
-            if ensemble_type == 'PoE'  and alpha != 0.:
-                prod_loss = get_prod_loss(output, criterion, num_classes, T)
-
-                losses_individual.update(loss.item(), input.size(0))
-                losses_prod.update(prod_loss.item(), input.size(0))
-
-                loss = loss + alpha * prod_loss
-
-            if ensemble_type == 'cascade':
-                raise NotImplementedError()
+        T = 1.
+        for j in range(L):
+            loss += criterion(output[j], target_var[j])
+            
 
         losses.update(loss.item(), input.size(0))
 
