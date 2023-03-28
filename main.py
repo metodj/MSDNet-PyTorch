@@ -79,7 +79,7 @@ def main():
         'project': 'anytime-poe-msdnet',
         'entity': 'metodj',
         'notes': '',
-        'mode': 'online',
+        'mode': 'offline',
         'config': vars(args)
     }
     with wandb.init(**wandb_kwargs) as run:
@@ -152,6 +152,7 @@ def main():
                                                            args.num_classes, args.likelihood, _step,
                                                            fun_schedule_T, args.alpha, args.ensemble_type, 
                                                            train_prec1, C_mono=args.C_mono, mono_penal=args.mono_penal, stop_grad=args.stop_grad)
+            return
             run.log({'train_loss': train_loss.avg})
             run.log({'train_prec1': train_prec1[-1].avg})
             for j in range(args.nBlocks):
@@ -236,6 +237,13 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
         output = model(input_var)
         if not isinstance(output, list):
             output = [output]
+
+        print('output', output[0].shape)
+        print('target', target_var.shape)
+        print('output', len(output))
+        print(type(target_var))
+        print(type(output[0]))
+        return
 
         loss = 0.0
         L = len(output)
