@@ -314,6 +314,8 @@ def get_logits_targets(dataset, model_folder, likelihood, epoch, cuda=True, logi
     # data
     if logits_type == 'test':
         _, _, _loader = get_dataloaders(ARGS)
+    if logits_type == 'val':
+        _, _loader, _ = get_dataloaders(ARGS)
     elif logits_type == 'train':
         _loader, _, _ = get_dataloaders(ARGS)
     else:
