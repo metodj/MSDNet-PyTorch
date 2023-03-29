@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import matplotlib.pyplot as plt
 from typing import Dict, Optional, List
 import scipy
 from tqdm import tqdm
@@ -11,6 +12,7 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 from collections import OrderedDict, Counter
 from sklearn.linear_model import LogisticRegression
+from netcal.metrics import ECE, ACE
 
 
 # TODO: most of the functions below have an ugly implementation with for loops, vectorize them
@@ -708,14 +710,14 @@ def get_probs_ovr_poe_w_adaptive_threshold(logits: torch.Tensor, weights: torch.
 
 
 def get_probs_ovr_poe_w_adapt_thres_log_reg(logits: torch.Tensor, weights: torch.Tensor, 
-                                            clf: LogisticRegression, C: float, break_ties: bool = True) -> torch.Tensor:
+                                            clf: LogisticRegression, C: float, break_ties: bool = True, K: int = 2) -> torch.Tensor:
     """
     TODO: Add fallback to logits in case of a collapse to zero distribution
 
     here we assume logits have shape (L, C), i.e. we have only one example
     """
     l = 0  # we look at the first early exit
-    top_logits = torch.topk(logits[l], 2).values.numpy()
+    top_logits = torch.topk(logits[l], K).values.numpy()
     
     thres = clf.predict_proba(top_logits.reshape(1, -1))[:, 1] * C
     thres = thres[0]  # flatten
@@ -726,7 +728,7 @@ def get_probs_ovr_poe_w_adapt_thres_log_reg(logits: torch.Tensor, weights: torch
         return f_probs_ovr_poe_logits_weighted_generalized(logits[:, None, :], threshold=thres, weights=weights)
 
 
-def grid_search_adapt_thres(_logits, _targets, clf, c_arr=[0., 5., 10., 15., 20.]):
+def grid_search_adapt_thres(_logits, _targets, clf, c_arr=[0., 5., 10., 15., 20.], K: int = 2):
 
     L, N = len(_logits), len(_logits[0])
 
@@ -736,7 +738,8 @@ def grid_search_adapt_thres(_logits, _targets, clf, c_arr=[0., 5., 10., 15., 20.
                                                                                                         logits=_logits[:, n, :], 
                                                                                                         weights=(np.arange(1, L + 1, 1, dtype=float) / L), 
                                                                                                         clf=clf, 
-                                                                                                        C=c)
+                                                                                                        C=c,
+                                                                                                        K=K)
                                                                 ) for n in range(N)], axis=1)
         probs_poe_ovr_adapt_thres = torch.tensor(probs_poe_ovr_adapt_thres)
         preds_poe_ovr_adapt_thres = {i: torch.argmax(probs_poe_ovr_adapt_thres, dim=2)[i, :] for i in range(L)}
@@ -750,3 +753,55 @@ def grid_search_adapt_thres(_logits, _targets, clf, c_arr=[0., 5., 10., 15., 20.
     C_dict['base'] = (probs, preds, acc)
 
     return C_dict
+
+
+def plot_adapt_thres(_logits, _targets, _dict, _label, dataset='CIFAR-100'):
+    N, L = len(_targets), len(_logits)
+
+    early_exits = [i + 1 for i in range(L)]
+    fig, ax = plt.subplots(1, 4, figsize=(16, 3))
+    for label, arrs in _dict.items():
+        _probs, _preds, _acc = arrs
+        ax[0].plot(early_exits, _acc, label=label, marker='o',)
+
+        
+        modal_probs = modal_probs_decreasing(_preds, _probs, layer=L, N=N)
+        ax[1].plot(modal_probs.keys(), modal_probs.values(), marker='o', label=label)
+
+        mean_magnitude, std_magnitude = _probs.max(2).values.mean(1), _probs.max(2).values.std(1)
+
+        ax[2].plot(early_exits, mean_magnitude, marker='o', label=label)
+        ax[2].fill_between(early_exits, mean_magnitude - std_magnitude, mean_magnitude + std_magnitude, alpha=0.2)
+
+        ece = []
+        for l in range(L):
+            ece.append(ECE(bins=15).measure(_probs[l, :, :].numpy(), _targets.numpy()))
+        ax[3].plot(early_exits, ece, marker='o', label=label)
+
+    ax[1].set_xlabel('max decrease in modal probability')
+    ax[1].set_ylabel('% of test examples')
+
+    ax[2].set_xlabel('early exit')
+    ax[2].set_ylabel('magnitude of max probability')
+
+    ax[3].set_xlabel('early exit')
+    ax[3].set_ylabel('ECE')
+
+    ax[0].legend()
+    # ax[0].set_title('anytime-prediction')
+    ax[0].set_ylabel('test accuracy')
+    ax[0].set_xlabel('early exit')
+
+    plt.suptitle(f'anytime-prediction ({dataset} {_label} data)')
+    plt.show()
+
+
+def fit_log_reg(logits: List[torch.Tensor], targets: torch.Tensor, l: int = 0, K: int = 2) -> LogisticRegression:
+
+    labels = (logits[l].argmax(axis=1) == targets).numpy().astype(int)
+    top_K_logits, _ = torch.topk(torch.tensor(logits[l]), K, dim=1)
+    top_K_logits = top_K_logits.numpy()
+
+    clf = LogisticRegression(random_state=0).fit(top_K_logits, labels)
+
+    return clf
