@@ -195,10 +195,10 @@ def f_probs_ovr_break_ties(logits, probs_ovr, T=1.0):
     return torch.tensor(preds)
 
 
-def f_probs_ovr_logits_weighted(logits):
+def f_probs_ovr_logits_weighted(logits, threshold=0.):
     C = logits.shape[-1]
     probs = logits.numpy().copy()
-    probs[probs < 0] = 0.0
+    probs[probs < threshold] = 0.0
     # normalize
     probs = probs / np.repeat(probs.sum(axis=2)[:, :, np.newaxis], C, axis=2)
     return probs
@@ -685,6 +685,7 @@ def f_probs_ovr_poe_logits_weighted_generalized_break_ties(logits, threshold=0.0
                 probs[l, n, :] = torch.softmax(logits[l, n, :], dim=0)
                 # probs[l, n, :] = (logits[:l + 1, n, :] > 0).sum(axis=0) / (logits[:l + 1, n, :] > 0).sum()
     return probs
+
 
 def get_probs_ovr_poe_w_adaptive_threshold(logits: torch.Tensor, weights: torch.Tensor, metric: str = 'top_2_logits', thres_metric: float = 4., 
                                           thres_hard: float = 0., thres_easy: float = 10., break_ties: bool = True) -> torch.Tensor:
