@@ -271,7 +271,7 @@ def f_probs_ovr_poe_logits_weighted_generalized(logits, threshold=0.0, weights=N
     return probs
 
 
-def get_logits_targets(dataset, model_folder, likelihood, epoch, ood_dataset=None):
+def get_logits_targets(dataset, model_folder, likelihood, epoch, cuda=True, ood_dataset=None):
     assert dataset in ["cifar10", "cifar100"]
     ARGS = parse_args()
     ARGS.data_root = "data"
@@ -296,13 +296,17 @@ def get_logits_targets(dataset, model_folder, likelihood, epoch, ood_dataset=Non
     # load pre-trained model
     model = MSDNet(args=ARGS)
     model_path = f"models/{model_folder}/save_models/checkpoint_{epoch}.pth.tar"
-    state = torch.load(model_path)
+    if cuda:
+        state = torch.load(model_path)
+    else:
+        state = torch.load(model_path, map_location=torch.device('cpu'))
     params = OrderedDict()
     for params_name, params_val in state["state_dict"].items():
         params[params_name.replace("module.", "")] = params_val
         # state['state_dict'][params_name.replace('module.', '')] = state['state_dict'].pop(params_name)
     model.load_state_dict(params)
-    model = model.cuda()
+    if cuda:
+        model = model.cuda()
     model.eval()
 
     # data
@@ -314,8 +318,9 @@ def get_logits_targets(dataset, model_folder, likelihood, epoch, ood_dataset=Non
     targets = []
     with torch.no_grad():
         for i, (x, y) in enumerate(test_loader):
-            y = y.cuda(device=None)
-            x = x.cuda()
+            if cuda:
+                y = y.cuda(device=None)
+                x = x.cuda()
 
             input_var = torch.autograd.Variable(x)
             target_var = torch.autograd.Variable(y)
