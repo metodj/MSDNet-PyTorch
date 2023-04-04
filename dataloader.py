@@ -45,6 +45,26 @@ def get_dataloaders(args, normalize=True):
                                         transforms.ToTensor(),
                                         normalize
                                     ]), download=True)
+    elif args.data == 'svhn':
+        if normalize:
+            normalize = transforms.Normalize(mean=[0.4377, 0.4438, 0.4728],
+                                             std=[0.1980, 0.2010, 0.1970])
+        else:
+            normalize = transforms.Normalize(mean=[0., 0., 0.],
+                                             std=[1., 1., 1.])
+
+        train_set = datasets.SVHN(args.data_root, split='train',
+                                    transform=transforms.Compose([
+                                        transforms.RandomCrop(32, padding=4),
+                                        transforms.RandomHorizontalFlip(),
+                                        transforms.ToTensor(),
+                                        normalize
+                                    ]), download=True)
+        val_set = datasets.SVHN(args.data_root, split='test',
+                                    transform=transforms.Compose([
+                                        transforms.ToTensor(),
+                                        normalize
+                                    ]), download=True)
     else:
         # ImageNet
         traindir = os.path.join(args.data_root, 'train')
