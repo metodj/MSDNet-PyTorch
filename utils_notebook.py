@@ -155,7 +155,7 @@ def f_probs_ovr_poe_logits_softmax(logits, L, threshold=0.0):
 
     # _logits = np.cumsum(_logits, axis=0)
     _logits = np.cumsum(_logits, axis=0) / np.array([float(i) for i in range(1, L + 1)])[:, None, None]
-    # _logits = np.cumprod(_logits, axis=0) 
+    # _logits = np.cumprod(_logits, axis=0)
 
     probs = np.zeros(mask.shape)
     for l in range(L):
@@ -271,13 +271,13 @@ def f_probs_ovr_poe_logits_weighted_generalized(logits, threshold=0.0, weights=N
     return probs
 
 
-def get_logits_targets(dataset, model_folder, likelihood, epoch):
+def get_logits_targets(dataset, model_folder, likelihood, epoch, ood_dataset=None):
     assert dataset in ["cifar10", "cifar100"]
     ARGS = parse_args()
     ARGS.data_root = "data"
     ARGS.data = dataset
     ARGS.save = (
-        f"/home/metod/Desktop/PhD/year1/PoE/MSDNet-PyTorch/models/{model_folder}"
+        f"models/{model_folder}"
     )
     ARGS.arch = "msdnet"
     ARGS.batch_size = 64
@@ -306,6 +306,8 @@ def get_logits_targets(dataset, model_folder, likelihood, epoch):
     model.eval()
 
     # data
+    if ood_dataset is not None:
+        ARGS.data = ood_dataset
     _, _, test_loader = get_dataloaders(ARGS)
 
     logits = []
@@ -337,7 +339,7 @@ def get_logits_targets_image_net(step=4):
         ARGS = parse_args()
         ARGS.data_root = "data"
         ARGS.data = "ImageNet"
-        ARGS.save = f"/home/metod/Desktop/PhD/year1/PoE/MSDNet-PyTorch/image_net"
+        ARGS.save = f"outputs/image_net"
         ARGS.arch = "msdnet"
         ARGS.batch_size = 64
         ARGS.epochs = 90
@@ -360,7 +362,7 @@ def get_logits_targets_image_net(step=4):
         ARGS = parse_args()
         ARGS.data_root = "data"
         ARGS.data = "ImageNet"
-        ARGS.save = f"/home/metod/Desktop/PhD/year1/PoE/MSDNet-PyTorch/image_net"
+        ARGS.save = f"outputs/image_net"
         ARGS.arch = "msdnet"
         ARGS.batch_size = 64
         ARGS.epochs = 90
@@ -607,7 +609,7 @@ def f_probs_ovr_poe_logits_sigmoid(logits, threshold=0.0, min_max_norm=True):
             if min_max_norm:
                 _logits_l_n = (_logits_l_n - _logits_l_n.min()) / (_logits_l_n.max() - _logits_l_n.min())  # for numerical stability
             probs[l, n, _mask_l_n] = scipy.special.expit(_logits_l_n)  # sigmoid
-            
+
     probs = np.cumprod(probs, axis=0)
     # normalize
     probs = probs / np.repeat(probs.sum(axis=2)[:, :, np.newaxis], C, axis=2)
@@ -631,5 +633,5 @@ def f_probs_ovr_poe_logits_sigmoid_log_probs(logits, threshold=0.0):
                 _logits_l_n_c = scipy.special.logsumexp(_logits_l_n - _logits_l_n[c])  # sum over C
                 c_arr.append(np.exp(-_logits_l_n_c))
             probs[l, n, _mask_l_n] = c_arr
-            
+
     return probs

@@ -105,9 +105,16 @@ ENV/
 
 # result files
 results/*
+models/*
 
 # cifar
 cifar-100-python/*
 cifar-100-python.*
 
 .DS_Store
+
+data/
+
+figures/
+
+outputs/

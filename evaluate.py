@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 args = parse_args()
 args.data_root = 'data'
 args.data = 'cifar100'
-args.save= '/home/metod/Desktop/PhD/year1/PoE/MSDNet-PyTorch/models/models'
+args.save= 'outputs/models/models'
 args.arch = 'msdnet'
 args.batch_size = 64
 args.epochs = 300
@@ -74,7 +74,7 @@ print((targets == max_index).sum() / len(targets))
 #     probs_i = probs[:, i, max_index[i]].cpu()
 #     print(probs_i)
 #     plt.plot(list(range(len(probs_i))), probs_i, label=f'{i}')
-# plt.savefig('/home/metod/Desktop/PhD/year1/PoE/MSDNet-PyTorch/modal_probs.pdf')
+# plt.savefig('outputs/modal_probs.pdf')
 # plt.show()
 
 # nr. of non-decreasing probability vectors in anytime-prediction regime
