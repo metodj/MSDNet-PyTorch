@@ -207,6 +207,7 @@ class MSDNet(nn.Module):
         self.nBlocks = args.nBlocks
         self.steps = [args.base]
         self.args = args
+        self.return_activation = args.return_activation
         
         n_layers_all, n_layer_curr = args.base, 0
         for i in range(1, self.nBlocks):
@@ -333,9 +334,13 @@ class MSDNet(nn.Module):
         return ClassifierModule(conv, nIn, num_classes)
 
     def forward(self, x):
-        res = []
+        res, activation = [], []
         for i in range(self.nBlocks):
             x = self.blocks[i](x)
+            activation.append(x)
             res.append(self.classifier[i](x))
-        return res
+        if self.return_activation:
+            return res, activation
+        else:
+            return res
 

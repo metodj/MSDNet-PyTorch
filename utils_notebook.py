@@ -275,7 +275,7 @@ def f_probs_ovr_poe_logits_weighted_generalized(logits, threshold=0.0, weights=N
     return probs
 
 
-def get_logits_targets(dataset, model_folder, likelihood, epoch, cuda=True, logits_type: str = 'test'):
+def get_logits_targets(dataset, model_folder, likelihood, epoch, cuda=True, logits_type: str = 'test', return_activation: bool = False):
     assert dataset in ["cifar10", "cifar100"]
     assert logits_type in ['train', 'test', 'val']
     ARGS = parse_args()
@@ -297,6 +297,7 @@ def get_logits_targets(dataset, model_folder, likelihood, epoch, cuda=True, logi
     ARGS.use_valid = True
     ARGS.splits = ["train", "val", "test"]
     ARGS.likelihood = likelihood
+    ARGS.return_activation = return_activation
 
     # load pre-trained model
     model = MSDNet(args=ARGS)
@@ -326,6 +327,7 @@ def get_logits_targets(dataset, model_folder, likelihood, epoch, cuda=True, logi
 
     logits = []
     targets = []
+    activations = []
     with torch.no_grad():
         for i, (x, y) in enumerate(_loader):
             if cuda:
@@ -335,7 +337,12 @@ def get_logits_targets(dataset, model_folder, likelihood, epoch, cuda=True, logi
             input_var = torch.autograd.Variable(x)
             target_var = torch.autograd.Variable(y)
 
-            output = model(input_var)
+            if ARGS.return_activation:
+                output, activation = model(input_var)
+                activations.append(activation[0][-1])
+            else:
+                output = model(input_var)
+
             if not isinstance(output, list):
                 output = [output]
 
@@ -344,6 +351,10 @@ def get_logits_targets(dataset, model_folder, likelihood, epoch, cuda=True, logi
 
     logits = torch.cat(logits, dim=1).cpu()
     targets = torch.cat(targets).cpu()
+    
+    if ARGS.return_activation:
+        activations = torch.cat(activations, dim=1).cpu()
+        return logits, targets, activations, ARGS
 
     return logits, targets, ARGS
 
@@ -711,7 +722,8 @@ def get_probs_ovr_poe_w_adaptive_threshold(logits: torch.Tensor, weights: torch.
 
 
 def get_probs_ovr_poe_w_adapt_thres_log_reg(logits: torch.Tensor, weights: torch.Tensor, 
-                                            clf: LogisticRegression, C: float, break_ties: bool = True, K: int = 2) -> torch.Tensor:
+                                            clf: LogisticRegression, C: float, break_ties: bool = True, 
+                                            K: int = 2, diff: bool = False) -> torch.Tensor:
     """
     TODO: Add fallback to logits in case of a collapse to zero distribution
 
@@ -719,6 +731,9 @@ def get_probs_ovr_poe_w_adapt_thres_log_reg(logits: torch.Tensor, weights: torch
     """
     l = 0  # we look at the first early exit
     top_logits = torch.topk(logits[l], K).values.numpy()
+    if diff:
+        assert K == 2
+        top_logits = top_logits[0] - top_logits[1]
     
     thres = clf.predict_proba(top_logits.reshape(1, -1))[:, 1] * C
     thres = thres[0]  # flatten
@@ -729,7 +744,7 @@ def get_probs_ovr_poe_w_adapt_thres_log_reg(logits: torch.Tensor, weights: torch
         return f_probs_ovr_poe_logits_weighted_generalized(logits[:, None, :], threshold=thres, weights=weights)
 
 
-def grid_search_adapt_thres(_logits, _targets, clf, c_arr=[0., 5., 10., 15., 20.], K: int = 2):
+def grid_search_adapt_thres(_logits, _targets, clf, c_arr=[0., 5., 10., 15., 20.], K: int = 2, diff: bool = False):
 
     L, N = len(_logits), len(_logits[0])
 
@@ -740,7 +755,8 @@ def grid_search_adapt_thres(_logits, _targets, clf, c_arr=[0., 5., 10., 15., 20.
                                                                                                         weights=(np.arange(1, L + 1, 1, dtype=float) / L), 
                                                                                                         clf=clf, 
                                                                                                         C=c,
-                                                                                                        K=K)
+                                                                                                        K=K,
+                                                                                                        diff=diff)
                                                                 ) for n in range(N)], axis=1)
         probs_poe_ovr_adapt_thres = torch.tensor(probs_poe_ovr_adapt_thres)
         preds_poe_ovr_adapt_thres = {i: torch.argmax(probs_poe_ovr_adapt_thres, dim=2)[i, :] for i in range(L)}
@@ -797,11 +813,13 @@ def plot_adapt_thres(_logits, _targets, _dict, _label, dataset='CIFAR-100'):
     plt.show()
 
 
-def fit_log_reg(logits: List[torch.Tensor], targets: torch.Tensor, l: int = 0, K: int = 2) -> LogisticRegression:
+def fit_log_reg(logits: List[torch.Tensor], targets: torch.Tensor, l: int = 0, K: int = 2, diff=False) -> LogisticRegression:
 
     labels = (logits[l].argmax(axis=1) == targets).numpy().astype(int)
     top_K_logits, _ = torch.topk(torch.tensor(logits[l]), K, dim=1)
     top_K_logits = top_K_logits.numpy()
+    if diff:
+        top_K_logits = -np.diff(top_K_logits, axis=1)
 
     clf = LogisticRegression(random_state=0).fit(top_K_logits, labels)
 
