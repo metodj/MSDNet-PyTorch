@@ -33,6 +33,7 @@ def get_grad_stats(model):
     grad = torch.cat([torch.flatten(v.grad.abs()) for _, v in model.named_parameters()])
     return torch.mean(grad), torch.std(grad)
 
+
 def get_depth_weighted_logits(logits: List[torch.Tensor], depth: int) -> List[torch.Tensor]:
     w = torch.tensor([depth - i for i in range(depth)])
     w = w / w.sum()
@@ -125,20 +126,51 @@ class ModifiedSoftmaxCrossEntropyLoss(nn.Module):
         return torch.mean(loss)
     
 
+class CustomBaseCrossEntropyLoss(nn.Module):
+    def __init__(self, a=1.2):
+        super(CustomBaseCrossEntropyLoss, self).__init__()
+        assert a > 0, "The base 'a' must be greater than 0"
+        self.a = a
+
+    def forward(self, logits, target):
+        # Subtract the maximum logit for numerical stability (log-sum-exp trick)
+        logits = logits - torch.max(logits, dim=1, keepdim=True)[0]
+
+        # Calculate the custom base exponential of the logits
+        custom_exp = torch.pow(self.a, logits)
+
+        # Normalize custom_exp to create a probability distribution
+        custom_softmax = custom_exp / torch.sum(custom_exp, dim=1, keepdim=True)
+
+        # Calculate the negative log-likelihood loss
+        target_one_hot = torch.zeros_like(custom_softmax).scatter_(1, target.unsqueeze(1), 1)
+        epsilon = 1e-9
+        loss = -torch.sum(target_one_hot * torch.log(custom_softmax + epsilon), dim=1)
+
+        # Calculate the average loss across the batch
+        return torch.mean(loss)
+    
+
 # # Define the custom loss function
 # criterion = ModifiedSoftmaxCrossEntropyLoss()
 # _criterion = nn.CrossEntropyLoss()
+# a_base_criterion = CustomBaseCrossEntropyLoss(a=1.1)
+
+# # set torch random seed
+# torch.manual_seed(0)
 
 # # Assume logits and target are tensors representing the predicted logits and true labels
-# logits = torch.randn(4, 10) - 10.  # A batch of 4 samples with 10 classes each
+# logits = torch.randn(4, 10)  # A batch of 4 samples with 10 classes each
 # target = torch.randint(0, 10, (4,))  # A batch of 4 ground-truth class labels
 
 # # Calculate the loss
 # loss = criterion(logits, target)
 # _loss = _criterion(logits, target)
+# a_base_loss = a_base_criterion(logits, target)
 
 # print(loss)
 # print(_loss)
+# print(a_base_loss)
 
 
     

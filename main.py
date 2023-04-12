@@ -16,7 +16,7 @@ from args import arg_parser
 from adaptive_inference import dynamic_evaluate
 import models
 from op_counter import measure_model
-from utils_poe import schedule_T, get_grad_stats, get_temp_diff_labels, ModifiedSoftmaxCrossEntropyLoss
+from utils_poe import schedule_T, get_grad_stats, get_temp_diff_labels, ModifiedSoftmaxCrossEntropyLoss, CustomBaseCrossEntropyLoss
 from utils import AverageMeter
 
 args = arg_parser.parse_args()
@@ -97,8 +97,10 @@ def main():
             model = torch.nn.DataParallel(model).cuda()
 
         if args.likelihood == 'softmax':
-            if args.modified_softmax:
+            if args.modified_softmax_relu:
                 criterion = ModifiedSoftmaxCrossEntropyLoss().cuda()
+            elif args.modified_softmax_base_a:
+                criterion = CustomBaseCrossEntropyLoss().cuda()
             else:
                 criterion = nn.CrossEntropyLoss().cuda()
         elif args.likelihood == 'OVR':
