@@ -79,7 +79,7 @@ def main():
         'project': 'anytime-poe-msdnet',
         'entity': 'metodj',
         'notes': '',
-        'mode': 'online',
+        'mode': 'offline',
         'config': vars(args)
     }
     with wandb.init(**wandb_kwargs) as run:
@@ -244,7 +244,17 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
         if not isinstance(output, list):
             output = [output]
     
+        # noise = 3.
+        # output = [x + noise for x in output]
+
         target_var = get_temp_diff_labels(target_var, output, temp_diff)
+
+        # print(output[0].shape)
+        # # print logits of correct class
+        # logits_correct = torch.gather(output[0], 1, target_var[0].unsqueeze(1)).squeeze(1)
+        # print(logits_correct.shape)
+        # print((logits_correct > 0).sum().item())
+        # return
 
         loss = 0.0
         L = len(output)

@@ -121,6 +121,7 @@ class ModifiedSoftmaxCrossEntropyLoss(nn.Module):
         # Calculate the negative log-likelihood loss
         target_one_hot = torch.zeros_like(modified_softmax).scatter_(1, target.unsqueeze(1), 1)
         loss = -torch.sum(target_one_hot * torch.log(modified_softmax + eps), dim=1)  # Add epsilon for numerical stability
+        # loss = -torch.sum(target_one_hot * modified_softmax + eps, dim=1)  # Add epsilon for numerical stability
 
         # Calculate the average loss across the batch
         return torch.mean(loss)
@@ -132,7 +133,7 @@ class CustomBaseCrossEntropyLoss(nn.Module):
         assert a > 0, "The base 'a' must be greater than 0"
         self.a = a
 
-    def forward(self, logits, target):
+    def forward(self, logits, target, eps=1e-9):
         # Subtract the maximum logit for numerical stability (log-sum-exp trick)
         logits = logits - torch.max(logits, dim=1, keepdim=True)[0]
 
@@ -144,8 +145,7 @@ class CustomBaseCrossEntropyLoss(nn.Module):
 
         # Calculate the negative log-likelihood loss
         target_one_hot = torch.zeros_like(custom_softmax).scatter_(1, target.unsqueeze(1), 1)
-        epsilon = 1e-9
-        loss = -torch.sum(target_one_hot * torch.log(custom_softmax + epsilon), dim=1)
+        loss = -torch.sum(target_one_hot * torch.log(custom_softmax + eps), dim=1)
 
         # Calculate the average loss across the batch
         return torch.mean(loss)
