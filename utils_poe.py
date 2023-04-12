@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import numpy as np
 from typing import List, Union
 from utils import AverageMeter
@@ -106,6 +107,40 @@ def get_temp_diff_labels(target_var: torch.Tensor, output: List[torch.Tensor], t
         return [out.argmax(dim=1).detach() for out in output[1:]] + [target_var]
     else:
         return [target_var for _ in range(len(output))]
+    
+
+class ModifiedSoftmaxCrossEntropyLoss(nn.Module):
+    def __init__(self):
+        super(ModifiedSoftmaxCrossEntropyLoss, self).__init__()
+
+    def forward(self, logits, target):
+        # Apply the modified softmax based on ReLU
+        modified_softmax = torch.relu(logits) / torch.sum(torch.relu(logits), dim=1, keepdim=True)
+
+        # Calculate the negative log-likelihood loss
+        target_one_hot = torch.zeros_like(modified_softmax).scatter_(1, target.unsqueeze(1), 1)
+        loss = -torch.sum(target_one_hot * torch.log(modified_softmax + 1e-9), dim=1)  # Add epsilon for numerical stability
+
+        # Calculate the average loss across the batch
+        return torch.mean(loss)
+    
+
+# # Define the custom loss function
+# criterion = ModifiedSoftmaxCrossEntropyLoss()
+# _criterion = nn.CrossEntropyLoss()
+
+# # Assume logits and target are tensors representing the predicted logits and true labels
+# logits = torch.randn(4, 10)  # A batch of 4 samples with 10 classes each
+# target = torch.randint(0, 10, (4,))  # A batch of 4 ground-truth class labels
+
+# # Calculate the loss
+# loss = criterion(logits, target)
+# _loss = _criterion(logits, target)
+
+# print(loss)
+# print(_loss)
+
+
     
 
 
