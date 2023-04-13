@@ -18,6 +18,7 @@ import models
 from op_counter import measure_model
 from utils_poe import schedule_T, get_grad_stats, get_temp_diff_labels, ModifiedSoftmaxCrossEntropyLoss, CustomBaseCrossEntropyLoss
 from utils import AverageMeter
+from torch.nn.utils import clip_grad_norm_
 
 args = arg_parser.parse_args()
 
@@ -157,7 +158,7 @@ def main():
                                                            args.num_classes, args.likelihood, _step,
                                                            fun_schedule_T, args.alpha, args.ensemble_type, 
                                                            train_prec1, C_mono=args.C_mono, mono_penal=args.mono_penal, 
-                                                           stop_grad=args.stop_grad, temp_diff=args.temp_diff)
+                                                           stop_grad=args.stop_grad, temp_diff=args.temp_diff, clip_grad=args.clip_grad)
         
             run.log({'train_loss': train_loss.avg})
             run.log({'train_prec1': train_prec1[-1].avg})
@@ -206,7 +207,7 @@ def main():
         return
 
 def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelihood, step, step_func=None, 
-          alpha=0., ensemble_type="DE", train_prec1=None, C_mono=0., mono_penal=0., stop_grad=False, temp_diff=False):
+          alpha=0., ensemble_type="DE", train_prec1=None, C_mono=0., mono_penal=0., stop_grad=False, temp_diff=False, clip_grad=0.):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -279,6 +280,9 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
         loss.backward()
         if i == 0:
             grad_mean, grad_stat = get_grad_stats(model)
+
+        if clip_grad > 0.:
+            clip_grad_norm_(model.parameters(), clip_grad)
         optimizer.step()
 
         # measure elapsed time

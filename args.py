@@ -101,6 +101,7 @@ arch_group.add_argument('--stop_grad', default=False, type=bool)
 arch_group.add_argument('--temp_diff', default=False, type=bool)
 arch_group.add_argument('--modified_softmax_relu', default=False, type=bool)
 arch_group.add_argument('--modified_softmax_base_a', default=False, type=bool)
+arch_group.add_argument('--clip_grad', default=0.0, type=float)
 # schedule T params are only relevant when OVR likelihood is used
 poe_group.add_argument('--schedule_T_type', default='sigmoid', type=str, choices=['sigmoid', 'constant'])
 poe_group.add_argument('--schedule_T_start', default=2.0, type=float)
