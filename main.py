@@ -79,7 +79,7 @@ def main():
         'project': 'anytime-poe-msdnet',
         'entity': 'metodj',
         'notes': '',
-        'mode': 'offline',
+        'mode': 'online',
         'config': vars(args)
     }
     with wandb.init(**wandb_kwargs) as run:
@@ -251,10 +251,14 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
 
         # print(output[0].shape)
         # # print logits of correct class
-        # logits_correct = torch.gather(output[0], 1, target_var[0].unsqueeze(1)).squeeze(1)
+        # logits_correct = (torch.gather(output[0], 1, target_var[0].unsqueeze(1)).squeeze(1) > 0)
         # print(logits_correct.shape)
         # print((logits_correct > 0).sum().item())
         # return
+
+        # print(step)
+        # print([(torch.gather(output[l], 1, target_var[l].unsqueeze(1)).squeeze(1) > 0).sum().item() for l in range(len(output))])
+        
 
         loss = 0.0
         L = len(output)

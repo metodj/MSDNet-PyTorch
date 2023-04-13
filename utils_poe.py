@@ -114,12 +114,16 @@ class ModifiedSoftmaxCrossEntropyLoss(nn.Module):
     def __init__(self):
         super(ModifiedSoftmaxCrossEntropyLoss, self).__init__()
 
-    def forward(self, logits, target, eps=1e-9):
+    def forward(self, logits, target, eps=1e-2):
         # Apply the modified softmax based on ReLU
         modified_softmax = torch.relu(logits) / (torch.sum(torch.relu(logits), dim=1, keepdim=True) + eps)
+        # modified_softmax = (torch.relu(logits) + 0.1) / (torch.sum((torch.relu(logits) + 0.1), dim=1, keepdim=True) + eps)
+        # modified_softmax = torch.sigmoid(logits) / (torch.sum(torch.sigmoid(logits), dim=1, keepdim=True))
+        # modified_softmax = torch.relu(logits) 
+
+        target_one_hot = torch.zeros_like(modified_softmax).scatter_(1, target.unsqueeze(1), 1)
 
         # Calculate the negative log-likelihood loss
-        target_one_hot = torch.zeros_like(modified_softmax).scatter_(1, target.unsqueeze(1), 1)
         loss = -torch.sum(target_one_hot * torch.log(modified_softmax + eps), dim=1)  # Add epsilon for numerical stability
         # loss = -torch.sum(target_one_hot * modified_softmax + eps, dim=1)  # Add epsilon for numerical stability
 
