@@ -16,7 +16,8 @@ from args import arg_parser
 from adaptive_inference import dynamic_evaluate
 import models
 from op_counter import measure_model
-from utils_poe import schedule_T, get_grad_stats, get_temp_diff_labels, ModifiedSoftmaxCrossEntropyLoss, CustomBaseCrossEntropyLoss
+from utils_poe import schedule_T, get_grad_stats, get_temp_diff_labels, ModifiedSoftmaxCrossEntropyLoss, \
+                            CustomBaseCrossEntropyLoss, ModifiedSoftmaxCrossEntropyLossProd
 from utils import AverageMeter
 from torch.nn.utils import clip_grad_norm_
 
@@ -98,12 +99,16 @@ def main():
             model = torch.nn.DataParallel(model).cuda()
 
         if args.likelihood == 'softmax':
-            if args.modified_softmax_relu:
+            if args.loss_type == 'relu':
                 criterion = ModifiedSoftmaxCrossEntropyLoss().cuda()
-            elif args.modified_softmax_base_a:
+            if args.loss_type == 'relu_prod':
+                criterion = ModifiedSoftmaxCrossEntropyLossProd().cuda()
+            elif args.loss_type == 'base_a':
                 criterion = CustomBaseCrossEntropyLoss().cuda()
-            else:
+            elif args.loss_type == 'standard':
                 criterion = nn.CrossEntropyLoss().cuda()
+            else:
+                raise ValueError()
         elif args.likelihood == 'OVR':
             criterion = nn.BCEWithLogitsLoss(reduction='mean').cuda()
         else:
@@ -158,7 +163,8 @@ def main():
                                                            args.num_classes, args.likelihood, _step,
                                                            fun_schedule_T, args.alpha, args.ensemble_type, 
                                                            train_prec1, C_mono=args.C_mono, mono_penal=args.mono_penal, 
-                                                           stop_grad=args.stop_grad, temp_diff=args.temp_diff, clip_grad=args.clip_grad)
+                                                           stop_grad=args.stop_grad, temp_diff=args.temp_diff, 
+                                                           clip_grad=args.clip_grad, loss_type=args.loss_type)
         
             run.log({'train_loss': train_loss.avg})
             run.log({'train_prec1': train_prec1[-1].avg})
@@ -172,7 +178,7 @@ def main():
             run.log({'lr': lr})
 
             val_loss, val_prec1, val_prec5 = validate(val_loader, model, criterion,
-                                                      args.num_classes, args.likelihood, _step, fun_schedule_T)
+                                                      args.num_classes, args.likelihood, _step, fun_schedule_T, loss_type=args.loss_type)
 
             run.log({'val_loss': val_loss})
             run.log({'val_prec1': val_prec1})
@@ -207,7 +213,7 @@ def main():
         return
 
 def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelihood, step, step_func=None, 
-          alpha=0., ensemble_type="DE", train_prec1=None, C_mono=0., mono_penal=0., stop_grad=False, temp_diff=False, clip_grad=0.):
+          alpha=0., ensemble_type="DE", train_prec1=None, C_mono=0., mono_penal=0., stop_grad=False, temp_diff=False, clip_grad=0., loss_type='standard'):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -249,23 +255,18 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
         # output = [x + noise for x in output]
 
         target_var = get_temp_diff_labels(target_var, output, temp_diff)
-
-        # print(output[0].shape)
-        # # print logits of correct class
-        # logits_correct = (torch.gather(output[0], 1, target_var[0].unsqueeze(1)).squeeze(1) > 0)
-        # print(logits_correct.shape)
-        # print((logits_correct > 0).sum().item())
-        # return
-
-        # print(step)
-        # print([(torch.gather(output[l], 1, target_var[l].unsqueeze(1)).squeeze(1) > 0).sum().item() for l in range(len(output))])
         
-
         loss = 0.0
         L = len(output)
         T = 1.
         for j in range(L):
-            loss += criterion(output[j], target_var[j])
+            if loss_type != 'relu_prod':
+                _logits = output[j]
+            else:
+                # stop_grad for previous logits
+                _logits = torch.stack([output[i].detach() for i in range(j)] + [output[j]], dim=0) 
+
+            loss += criterion(_logits, target_var[j])
             
 
         losses.update(loss.item(), input.size(0))
@@ -304,7 +305,7 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
 
     return losses, top1, top5[-1].avg, running_lr, step, T, losses_individual.avg, losses_prod.avg, grad_mean, grad_stat
 
-def validate(val_loader, model, criterion, num_classes, likelihood, step, step_func=None):
+def validate(val_loader, model, criterion, num_classes, likelihood, step, step_func=None, loss_type='standard'):
     batch_time = AverageMeter()
     losses = AverageMeter()
     data_time = AverageMeter()
@@ -335,7 +336,12 @@ def validate(val_loader, model, criterion, num_classes, likelihood, step, step_f
             for j in range(len(output)):
                 if likelihood == 'softmax':
                     T = 1.
-                    loss += criterion(output[j], target_var)
+                    if loss_type != 'relu_prod':
+                        _logits = output[j]
+                    else:
+                        # stop_grad for previous logits
+                        _logits = torch.stack([output[i].detach() for i in range(j)] + [output[j]], dim=0) 
+                    loss += criterion(_logits, target_var)
                 elif likelihood == 'OVR':
                     if step_func is not None:
                         T = step_func(step)

@@ -117,15 +117,37 @@ class ModifiedSoftmaxCrossEntropyLoss(nn.Module):
     def forward(self, logits, target, eps=1e-2):
         # Apply the modified softmax based on ReLU
         modified_softmax = torch.relu(logits) / (torch.sum(torch.relu(logits), dim=1, keepdim=True) + eps)
-        # modified_softmax = (torch.relu(logits) + 0.1) / (torch.sum((torch.relu(logits) + 0.1), dim=1, keepdim=True) + eps)
-        # modified_softmax = torch.sigmoid(logits) / (torch.sum(torch.sigmoid(logits), dim=1, keepdim=True))
-        # modified_softmax = torch.relu(logits) 
 
         target_one_hot = torch.zeros_like(modified_softmax).scatter_(1, target.unsqueeze(1), 1)
 
         # Calculate the negative log-likelihood loss
         loss = -torch.sum(target_one_hot * torch.log(modified_softmax + eps), dim=1)  # Add epsilon for numerical stability
         # loss = -torch.sum(target_one_hot * modified_softmax + eps, dim=1)  # Add epsilon for numerical stability
+
+        # Calculate the average loss across the batch
+        return torch.mean(loss)
+
+
+class ModifiedSoftmaxCrossEntropyLossProd(nn.Module):
+    def __init__(self):
+        super(ModifiedSoftmaxCrossEntropyLossProd, self).__init__()
+
+    def forward(self, logits, target, eps=1e-2):
+
+        # Apply ReLU to logits
+        relu_logits = torch.relu(logits)
+
+        # Take product along axis=0
+        prod_logits = torch.prod(relu_logits, dim=0)
+
+        # Normalize prod_logits to get valid probabilities
+        modified_softmax = prod_logits / (torch.sum(prod_logits, dim=1, keepdim=True) + eps)
+
+        # Create one-hot representation of target
+        target_one_hot = torch.zeros_like(modified_softmax).scatter_(1, target.unsqueeze(1), 1)
+
+        # Calculate the negative log-likelihood loss
+        loss = -torch.sum(target_one_hot * torch.log(modified_softmax + eps), dim=1)  # Add epsilon for numerical stability
 
         # Calculate the average loss across the batch
         return torch.mean(loss)
