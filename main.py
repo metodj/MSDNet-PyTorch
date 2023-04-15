@@ -264,7 +264,10 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
                 _logits = output[j]
             else:
                 # stop_grad for previous logits
-                _logits = torch.stack([output[i].detach() for i in range(j)] + [output[j]], dim=0) 
+                if stop_grad:
+                    _logits = torch.stack([output[i].detach() for i in range(j)] + [output[j]], dim=0) 
+                else:
+                    _logits = torch.stack(output[:j+1], dim=0) 
 
             loss += criterion(_logits, target_var[j])
             
