@@ -261,8 +261,8 @@ def get_ood_ovr(_probs: torch.Tensor, L: int = 7) -> Dict:
     return ood_dict_ids
 
 
-def f_probs_ovr_poe_logits_weighted_generalized(logits, threshold=0.0, weights=None):
-    L, C = logits.shape[0], logits.shape[-1]
+def f_probs_ovr_poe_logits_weighted_generalized(logits, threshold=0.0, weights=None, break_ties=False):
+    L, N, C = logits.shape[0], logits.shape[1], logits.shape[2]
     probs = logits.numpy().copy()
     probs[probs < threshold] = 0.0
     if weights is not None:
@@ -271,7 +271,19 @@ def f_probs_ovr_poe_logits_weighted_generalized(logits, threshold=0.0, weights=N
             probs[l, :, :] = probs[l, :, :] ** weights[l]
     probs = np.cumprod(probs, axis=0)
     # normalize
-    probs = probs / np.repeat(probs.sum(axis=2)[:, :, np.newaxis], C, axis=2)
+    if break_ties:
+        for l in range(L):
+            for n in range(N):
+                sum_l_n = probs[l, n, :].sum()
+                if sum_l_n > 0.:
+                    probs[l, n, :] = probs[l, n, :] / sum_l_n
+                else:
+                    # probs[l, n, :] = (1 / C) * torch.ones(C)
+                    # probs[l, n, :] = torch.zeros(C)
+                    probs[l, n, :] = torch.softmax(logits[l, n, :], dim=0)
+                    # probs[l, n, :] = (logits[:l + 1, n, :] > 0).sum(axis=0) / (logits[:l + 1, n, :] > 0).sum()
+    else:
+        probs = probs / np.repeat(probs.sum(axis=2)[:, :, np.newaxis], C, axis=2)
     return probs
 
 
