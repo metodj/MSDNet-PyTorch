@@ -404,13 +404,16 @@ def save_checkpoint(state, args, is_best, filename, result):
     return
 
 def load_checkpoint(args):
-    model_dir = os.path.join(args.save, 'save_models')
-    latest_filename = os.path.join(model_dir, 'latest.txt')
-    if os.path.exists(latest_filename):
-        with open(latest_filename, 'r') as fin:
-            model_filename = fin.readlines()[0].strip()
-    else:
-        return None
+    # model_dir = os.path.join(args.save, 'save_models')
+    # latest_filename = os.path.join(model_dir, 'latest.txt')
+    # if os.path.exists(latest_filename):
+    #     with open(latest_filename, 'r') as fin:
+    #         model_filename = fin.readlines()[0].strip()
+    # else:
+    #     return None
+
+    model_dir = os.path.join(args.pretrained_model, 'save_models')
+    model_filename = f"{model_dir}/checkpoint_{args.pretrained_epoch}.pth.tar"
     print("=> loading checkpoint '{}'".format(model_filename))
     state = torch.load(model_filename)
     print("=> loaded checkpoint '{}'".format(model_filename))

@@ -25,6 +25,10 @@ exp_group.add_argument('--print-freq', '-p', default=10, type=int,
 exp_group.add_argument('--seed', default=0, type=int,
                        help='random seed')
 exp_group.add_argument('--gpu', default=None, type=str, help='GPU available.')
+exp_group.add_argument('--pretrained_model', default=None, type=str,
+                       help='path to saved checkpoint (default: none)')
+exp_group.add_argument('--pretrained_epoch', default=150, type=int,
+                       metavar='N', help='epoch of pretrained model (default: 150)')
 
 # dataset related
 data_group = arg_parser.add_argument_group('data', 'dataset setting')
