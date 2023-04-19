@@ -100,9 +100,9 @@ def main():
 
         if args.likelihood == 'softmax':
             if args.loss_type == 'relu':
-                criterion = ModifiedSoftmaxCrossEntropyLoss().cuda()
+                criterion = ModifiedSoftmaxCrossEntropyLoss(eps=args.prod_eps).cuda()
             elif args.loss_type == 'relu_prod':
-                criterion = ModifiedSoftmaxCrossEntropyLossProd().cuda()
+                criterion = ModifiedSoftmaxCrossEntropyLossProd(eps=args.prod_eps).cuda()
             elif args.loss_type == 'base_a':
                 criterion = CustomBaseCrossEntropyLoss().cuda()
             elif args.loss_type == 'standard':
