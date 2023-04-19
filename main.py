@@ -101,7 +101,7 @@ def main():
         if args.likelihood == 'softmax':
             if args.loss_type == 'relu':
                 criterion = ModifiedSoftmaxCrossEntropyLoss().cuda()
-            if args.loss_type == 'relu_prod':
+            elif args.loss_type == 'relu_prod':
                 criterion = ModifiedSoftmaxCrossEntropyLossProd().cuda()
             elif args.loss_type == 'base_a':
                 criterion = CustomBaseCrossEntropyLoss().cuda()
@@ -208,7 +208,7 @@ def main():
         ### Test the final model
 
         print('********** Final prediction results **********')
-        validate(test_loader, model, criterion, args.num_classes, args.likelihood, _step, fun_schedule_T)
+        validate(test_loader, model, criterion, args.num_classes, args.likelihood, _step, fun_schedule_T, loss_type=args.loss_type)
 
         return
 

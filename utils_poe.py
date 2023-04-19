@@ -132,6 +132,7 @@ class ModifiedSoftmaxCrossEntropyLossProd(nn.Module):
     def __init__(self):
         super(ModifiedSoftmaxCrossEntropyLossProd, self).__init__()
 
+    # TODO: explore further the effect of eps
     def forward(self, logits, target, eps=1e-2):
 
         # Apply ReLU to logits
