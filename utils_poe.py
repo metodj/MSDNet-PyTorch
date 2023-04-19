@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 from typing import List, Union
 from utils import AverageMeter
@@ -130,19 +131,25 @@ class ModifiedSoftmaxCrossEntropyLoss(nn.Module):
 
 
 class ModifiedSoftmaxCrossEntropyLossProd(nn.Module):
-    def __init__(self, eps=1e-2, eps_log=1e-20):
+    def __init__(self, eps=1e-4, eps_log=1e-20, act_func='relu'):
         super(ModifiedSoftmaxCrossEntropyLossProd, self).__init__()
         self.eps = eps
         self.eps_log = eps_log
+        assert act_func in ['relu', 'softplus']
+        if act_func == 'relu':
+            self.act_func = torch.relu
+        elif act_func == 'softplus':
+            self.act_func = F.softplus
+        
 
     # TODO: explore further the effect of eps
     def forward(self, logits, target):
 
-        # Apply ReLU to logits
-        relu_logits = torch.relu(logits)
+        # Apply activation function to logits
+        logits = self.act_func(logits)
 
         # Take product along axis=0
-        prod_logits = torch.prod(relu_logits, dim=0)
+        prod_logits = torch.prod(logits, dim=0)
 
         # Normalize prod_logits to get valid probabilities
         modified_softmax = prod_logits / (torch.sum(prod_logits, dim=1, keepdim=True) + self.eps)

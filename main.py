@@ -20,6 +20,7 @@ from utils_poe import schedule_T, get_grad_stats, get_temp_diff_labels, Modified
                             CustomBaseCrossEntropyLoss, ModifiedSoftmaxCrossEntropyLossProd
 from utils import AverageMeter
 from torch.nn.utils import clip_grad_norm_
+import torch.nn.functional as F
 
 args = arg_parser.parse_args()
 
@@ -102,7 +103,7 @@ def main():
             if args.loss_type == 'relu':
                 criterion = ModifiedSoftmaxCrossEntropyLoss(eps=args.prod_eps).cuda()
             elif args.loss_type == 'relu_prod':
-                criterion = ModifiedSoftmaxCrossEntropyLossProd(eps=args.prod_eps, eps_log=args.prod_eps_log).cuda()
+                criterion = ModifiedSoftmaxCrossEntropyLossProd(eps=args.prod_eps, eps_log=args.prod_eps_log, act_func=args.prod_act_func).cuda()
             elif args.loss_type == 'base_a':
                 criterion = CustomBaseCrossEntropyLoss().cuda()
             elif args.loss_type == 'standard':
@@ -445,7 +446,8 @@ def accuracy(output, target, topk=(1,)):
 
 
 def accuracy_prod(output, target):
-    output = torch.relu(output)
+    # output = torch.relu(output)
+    output = F.softplus(output)
     output = torch.prod(output, dim=0)
 
     _, pred = output.topk(1, 1, True, True)
@@ -457,7 +459,8 @@ def accuracy_prod(output, target):
     return res
 
 def zero_prob_collapse(output):
-    output = torch.relu(output)
+    # output = torch.relu(output)
+    output = F.softplus(output)
     output = torch.prod(output, dim=0)
 
     zero_nr = (output.sum(axis=1) == 0.).float().sum(0)
