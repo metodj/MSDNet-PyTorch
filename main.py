@@ -179,7 +179,7 @@ def main():
             run.log({'lr': lr})
 
             val_loss, val_prec1, val_prec5 = validate(val_loader, model, criterion,
-                                                      args.num_classes, args.likelihood, _step, fun_schedule_T, loss_type=args.loss_type)
+                                                      args.num_classes, args.likelihood, _step, fun_schedule_T, loss_type=args.loss_type, act_func=args.prod_act_func)
 
             run.log({'val_loss': val_loss})
             run.log({'val_prec1': val_prec1})
@@ -209,7 +209,7 @@ def main():
         ### Test the final model
 
         print('********** Final prediction results **********')
-        validate(test_loader, model, criterion, args.num_classes, args.likelihood, _step, fun_schedule_T, loss_type=args.loss_type)
+        validate(test_loader, model, criterion, args.num_classes, args.likelihood, _step, fun_schedule_T, loss_type=args.loss_type, act_func=args.prod_act_func)
 
         return
 
@@ -309,7 +309,7 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
 
     return losses, top1, top5[-1].avg, running_lr, step, T, losses_individual.avg, losses_prod.avg, grad_mean, grad_stat
 
-def validate(val_loader, model, criterion, num_classes, likelihood, step, step_func=None, loss_type='standard'):
+def validate(val_loader, model, criterion, num_classes, likelihood, step, step_func=None, loss_type='standard', act_func='relu'):
     batch_time = AverageMeter()
     losses = AverageMeter()
     data_time = AverageMeter()
@@ -360,8 +360,8 @@ def validate(val_loader, model, criterion, num_classes, likelihood, step, step_f
             for j in range(len(output)):
                 
                 prec1, prec5 = accuracy(output[j].data, target, topk=(1, 5))
-                prec1prod = accuracy_prod(torch.stack(output[:j + 1], dim=0).data, target)
-                _zero_prob = zero_prob_collapse(torch.stack(output[:j + 1], dim=0).data)
+                prec1prod = accuracy_prod(torch.stack(output[:j + 1], dim=0).data, target, act_func=act_func)
+                _zero_prob = zero_prob_collapse(torch.stack(output[:j + 1], dim=0).data, act_func=act_func)
                
                 top1[j].update(prec1.item(), input.size(0))
                 top5[j].update(prec5.item(), input.size(0))
@@ -445,9 +445,12 @@ def accuracy(output, target, topk=(1,)):
     return res
 
 
-def accuracy_prod(output, target):
-    # output = torch.relu(output)
-    output = F.softplus(output)
+def accuracy_prod(output, target, act_func='relu'):
+    if act_func == 'relu':
+        output = torch.relu(output)
+    else:
+        output = F.softplus(output)
+
     output = torch.prod(output, dim=0)
 
     _, pred = output.topk(1, 1, True, True)
@@ -458,9 +461,12 @@ def accuracy_prod(output, target):
     res = correct_k.mul_(100.0 / target.size(0))
     return res
 
-def zero_prob_collapse(output):
-    # output = torch.relu(output)
-    output = F.softplus(output)
+def zero_prob_collapse(output, act_func='relu'):
+    if act_func == 'relu':
+        output = torch.relu(output)
+    else:
+        output = F.softplus(output)
+    
     output = torch.prod(output, dim=0)
 
     zero_nr = (output.sum(axis=1) == 0.).float().sum(0)
