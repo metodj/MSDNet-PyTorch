@@ -81,7 +81,7 @@ def main():
         'project': 'anytime-poe-msdnet',
         'entity': 'metodj',
         'notes': '',
-        'mode': 'online',
+        'mode': 'offline',
         'config': vars(args)
     }
     with wandb.init(**wandb_kwargs) as run:
@@ -102,7 +102,7 @@ def main():
             if args.loss_type == 'relu':
                 criterion = ModifiedSoftmaxCrossEntropyLoss(eps=args.prod_eps).cuda()
             elif args.loss_type == 'relu_prod':
-                criterion = ModifiedSoftmaxCrossEntropyLossProd(eps=args.prod_eps).cuda()
+                criterion = ModifiedSoftmaxCrossEntropyLossProd(eps=args.prod_eps, eps_log=args.prod_eps_log).cuda()
             elif args.loss_type == 'base_a':
                 criterion = CustomBaseCrossEntropyLoss().cuda()
             elif args.loss_type == 'standard':
@@ -312,10 +312,12 @@ def validate(val_loader, model, criterion, num_classes, likelihood, step, step_f
     batch_time = AverageMeter()
     losses = AverageMeter()
     data_time = AverageMeter()
-    top1, top5 = [], []
+    top1, top5, top1prod, zero_prob = [], [], [], []
     for i in range(args.nBlocks):
         top1.append(AverageMeter())
         top5.append(AverageMeter())
+        top1prod.append(AverageMeter())
+        zero_prob.append(AverageMeter())
 
     model.eval()
 
@@ -355,9 +357,15 @@ def validate(val_loader, model, criterion, num_classes, likelihood, step, step_f
             losses.update(loss.item(), input.size(0))
 
             for j in range(len(output)):
+                
                 prec1, prec5 = accuracy(output[j].data, target, topk=(1, 5))
+                prec1prod = accuracy_prod(torch.stack(output[:j + 1], dim=0).data, target)
+                _zero_prob = zero_prob_collapse(torch.stack(output[:j + 1], dim=0).data)
+               
                 top1[j].update(prec1.item(), input.size(0))
                 top5[j].update(prec5.item(), input.size(0))
+                top1prod[j].update(prec1prod.item(), input.size(0))
+                zero_prob[j].update(_zero_prob.item(), input.size(0))
 
             # measure elapsed time
             batch_time.update(time.time() - end)
@@ -375,7 +383,8 @@ def validate(val_loader, model, criterion, num_classes, likelihood, step, step_f
                         batch_time=batch_time, data_time=data_time,
                         loss=losses, top1=top1[-1], top5=top5[-1], T=T))
     for j in range(args.nBlocks):
-        print(' * prec@1 {top1.avg:.3f} prec@5 {top5.avg:.3f}'.format(top1=top1[j], top5=top5[j]))
+        print('exit {j} * prec@1 {top1.avg:.3f} prec@5 {top5.avg:.3f} prec@1prod {top1prod.avg:.3f} zero_prob {zero_prob.avg:.3f}'.format(j=j+1, top1=top1[j], top5=top5[j], 
+                                                                                                                                  top1prod=top1prod[j], zero_prob=zero_prob[j]))
     # print(' * prec@1 {top1.avg:.3f} prec@5 {top5.avg:.3f}'.format(top1=top1[-1], top5=top5[-1]))
     return losses.avg, top1[-1].avg, top5[-1].avg
 
@@ -432,6 +441,28 @@ def accuracy(output, target, topk=(1,)):
     for k in topk:
         correct_k = correct[:k].reshape(-1).float().sum(0)
         res.append(correct_k.mul_(100.0 / batch_size))
+    return res
+
+
+def accuracy_prod(output, target):
+    output = torch.relu(output)
+    output = torch.prod(output, dim=0)
+
+    _, pred = output.topk(1, 1, True, True)
+    pred = pred.t()
+    correct = pred.eq(target.view(1, -1).expand_as(pred))
+
+    correct_k = correct[:1].reshape(-1).float().sum(0)
+    res = correct_k.mul_(100.0 / target.size(0))
+    return res
+
+def zero_prob_collapse(output):
+    output = torch.relu(output)
+    output = torch.prod(output, dim=0)
+
+    zero_nr = (output.sum(axis=1) == 0.).float().sum(0)
+    res = zero_nr.mul_(100.0 / output.size(0))
+
     return res
 
 def adjust_learning_rate(optimizer, epoch, args, batch=None,

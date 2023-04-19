@@ -111,3 +111,5 @@ poe_group.add_argument('--schedule_T_start', default=2.0, type=float)
 poe_group.add_argument('--schedule_T_end', default=16.0, type=float)
 poe_group.add_argument('--alpha', default=1.0, type=float)
 poe_group.add_argument('--prod_eps', default=1e-2, type=float)
+poe_group.add_argument('--prod_eps_log', default=1e-20, type=float)
+

@@ -130,9 +130,10 @@ class ModifiedSoftmaxCrossEntropyLoss(nn.Module):
 
 
 class ModifiedSoftmaxCrossEntropyLossProd(nn.Module):
-    def __init__(self, eps=1e-2):
+    def __init__(self, eps=1e-2, eps_log=1e-20):
         super(ModifiedSoftmaxCrossEntropyLossProd, self).__init__()
         self.eps = eps
+        self.eps_log = eps_log
 
     # TODO: explore further the effect of eps
     def forward(self, logits, target):
@@ -150,7 +151,8 @@ class ModifiedSoftmaxCrossEntropyLossProd(nn.Module):
         target_one_hot = torch.zeros_like(modified_softmax).scatter_(1, target.unsqueeze(1), 1)
 
         # Calculate the negative log-likelihood loss
-        loss = -torch.sum(target_one_hot * torch.log(modified_softmax + self.eps), dim=1)  # Add epsilon for numerical stability
+        loss = -torch.sum(target_one_hot * torch.log(modified_softmax + self.eps_log), dim=1)  # Add epsilon for numerical stability
+        # loss = -torch.sum(target_one_hot * modified_softmax, dim=1)  # Add epsilon for numerical stability
 
         # Calculate the average loss across the batch
         return torch.mean(loss)
