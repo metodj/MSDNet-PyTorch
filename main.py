@@ -444,7 +444,6 @@ def accuracy(output, target, topk=(1,)):
         res.append(correct_k.mul_(100.0 / batch_size))
     return res
 
-
 def accuracy_prod(output, target, act_func='relu'):
     if act_func == 'relu':
         output = torch.relu(output)
