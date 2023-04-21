@@ -124,7 +124,10 @@ def main():
             checkpoint = load_checkpoint(args)
             if checkpoint is not None:
                 args.start_epoch = checkpoint['epoch'] + 1
-                best_prec1 = checkpoint['best_prec1']
+                if args.data != 'ImageNet': 
+                    best_prec1 = checkpoint['best_prec1']
+                else:
+                    best_prec1 = 0.
                 model.load_state_dict(checkpoint['state_dict'])
                 optimizer.load_state_dict(checkpoint['optimizer'])
 
