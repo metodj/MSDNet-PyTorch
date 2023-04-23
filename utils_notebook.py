@@ -319,8 +319,12 @@ def get_logits_targets(dataset, model_folder, likelihood, epoch, cuda=True, logi
     ARGS = parse_args()
     ARGS.data_root = "data"
     ARGS.data = dataset
+    if dataset == "cifar10":
+        folder_path = 'models_cifar_10'
+    else:
+        folder_path = 'models'
     ARGS.save = (
-        f"/home/metod/Desktop/PhD/year1/PoE/MSDNet-PyTorch/models/{model_folder}"
+        f"/home/metod/Desktop/PhD/year1/PoE/MSDNet-PyTorch/{folder_path}/{model_folder}"
     )
     ARGS.arch = "msdnet"
     ARGS.batch_size = 64
@@ -338,7 +342,7 @@ def get_logits_targets(dataset, model_folder, likelihood, epoch, cuda=True, logi
 
     # load pre-trained model
     model = MSDNet(args=ARGS)
-    model_path = f"models/{model_folder}/save_models/checkpoint_{epoch}.pth.tar"
+    model_path = f"{folder_path}/{model_folder}/save_models/checkpoint_{epoch}.pth.tar"
     if cuda:
         state = torch.load(model_path)
     else: 
@@ -386,13 +390,13 @@ def get_logits_targets(dataset, model_folder, likelihood, epoch, cuda=True, logi
     return logits, targets, ARGS
 
 
-def get_logits_targets_image_net(step=4):
+def get_logits_targets_image_net(step=4, model_path='image_net', model_name: Optional[str]=None):
     assert step in [4, 7]
     if step == 4:
         ARGS = parse_args()
         ARGS.data_root = "data"
         ARGS.data = "ImageNet"
-        ARGS.save = f"/home/metod/Desktop/PhD/year1/PoE/MSDNet-PyTorch/image_net"
+        ARGS.save = f"/home/metod/Desktop/PhD/year1/PoE/MSDNet-PyTorch/{model_path}"
         ARGS.arch = "msdnet"
         ARGS.batch_size = 64
         ARGS.epochs = 90
@@ -410,12 +414,15 @@ def get_logits_targets_image_net(step=4):
         ARGS.splits = ["train", "val", "test"]
         ARGS.likelihood = "softmax"
         ARGS.nScales = len(ARGS.grFactor)
-        MODEL_PATH = f"image_net/msdnet-step=4-block=5.pth.tar"
+        if model_name is None:
+            MODEL_PATH = f"image_net/msdnet-step=4-block=5.pth.tar"
+        else:
+            MODEL_PATH = f"{model_path}/{model_name}"
     elif step == 7:
         ARGS = parse_args()
         ARGS.data_root = "data"
         ARGS.data = "ImageNet"
-        ARGS.save = f"/home/metod/Desktop/PhD/year1/PoE/MSDNet-PyTorch/image_net"
+        ARGS.save = f"/home/metod/Desktop/PhD/year1/PoE/MSDNet-PyTorch/{model_path}"
         ARGS.arch = "msdnet"
         ARGS.batch_size = 64
         ARGS.epochs = 90
@@ -433,6 +440,7 @@ def get_logits_targets_image_net(step=4):
         ARGS.splits = ["train", "val", "test"]
         ARGS.likelihood = "softmax"
         ARGS.nScales = len(ARGS.grFactor)
+        assert model_name is None
         MODEL_PATH = f"image_net/msdnet-step=7-block=5.pth.tar"
 
     # load pre-trained model
@@ -450,7 +458,7 @@ def get_logits_targets_image_net(step=4):
     params = sum([np.prod(p.size()) for p in model_parameters])
     print(f"nr. of trainable params: {params}")
 
-    val_loader =get_image_net_val_loader(ARGS)
+    val_loader = get_image_net_val_loader(ARGS)
 
     logits = []
     targets = []

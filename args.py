@@ -27,7 +27,7 @@ exp_group.add_argument('--seed', default=0, type=int,
 exp_group.add_argument('--gpu', default=None, type=str, help='GPU available.')
 exp_group.add_argument('--pretrained_model', default=None, type=str,
                        help='path to saved checkpoint (default: none)')
-exp_group.add_argument('--pretrained_epoch', default=150, type=int,
+exp_group.add_argument('--pretrained_epoch', default='150', type=str,
                        metavar='N', help='epoch of pretrained model (default: 150)')
 
 # dataset related
