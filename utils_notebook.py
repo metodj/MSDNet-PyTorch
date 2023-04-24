@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 import numpy as np
 from typing import Dict, Optional, List
 import scipy
@@ -665,3 +666,28 @@ def anytime_caching(_probs: torch.Tensor, N: int, L: int) -> torch.Tensor:
     _preds = torch.stack(_preds)
     _probs_stateful = torch.stack(_probs_stateful)
     return _probs_stateful.permute(1, 0, 2)
+
+
+def f_probs_pa_softplus(logits, weights=None, break_ties=False):
+    L, N, C = logits.shape[0], logits.shape[1], logits.shape[2]
+    probs = F.softplus(logits.clone()).numpy()
+    if weights is not None:
+        assert logits.shape[0] == weights.shape[0]
+        for l in range(L):
+            probs[l, :, :] = probs[l, :, :] ** weights[l]
+    probs = np.cumprod(probs, axis=0)
+    # normalize
+    if break_ties:
+        for l in range(L):
+            for n in range(N):
+                sum_l_n = probs[l, n, :].sum()
+                if sum_l_n > 0.:
+                    probs[l, n, :] = probs[l, n, :] / sum_l_n
+                else:
+                    # probs[l, n, :] = (1 / C) * torch.ones(C)
+                    # probs[l, n, :] = torch.zeros(C)
+                    probs[l, n, :] = torch.softmax(logits[l, n, :], dim=0)
+                    # probs[l, n, :] = (logits[:l + 1, n, :] > 0).sum(axis=0) / (logits[:l + 1, n, :] > 0).sum()
+    else:
+        probs = probs / np.repeat(probs.sum(axis=2)[:, :, np.newaxis], C, axis=2)
+    return probs
