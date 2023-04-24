@@ -116,7 +116,16 @@ def main():
             raise ValueError()
 
         wandb.watch(model, log='gradients', log_freq=500)
-        optimizer = torch.optim.SGD(model.parameters(), args.lr,
+        if args.fit_ens_weights:
+            L = 7
+            weights = torch.ones(L, requires_grad=True).cuda()
+            weights = nn.Parameter(weights)
+            optimizer = torch.optim.SGD(list(model.parameters()) + [weights], args.lr,
+                                    momentum=args.momentum,
+                                    weight_decay=args.weight_decay)
+        else:
+            weights = None
+            optimizer = torch.optim.SGD(model.parameters(), args.lr,
                                     momentum=args.momentum,
                                     weight_decay=args.weight_decay)
 
@@ -129,7 +138,8 @@ def main():
                 else:
                     best_prec1 = 0.
                 model.load_state_dict(checkpoint['state_dict'])
-                optimizer.load_state_dict(checkpoint['optimizer'])
+                # optimizer.load_state_dict(checkpoint['optimizer'])
+                update_optimizer_state_dict(optimizer, checkpoint['optimizer'], weights)
 
         cudnn.benchmark = True
 
@@ -157,18 +167,20 @@ def main():
         else:
             raise ValueError()
 
+        
+
         _step = 0
         train_prec1 = None
         for epoch in range(args.start_epoch, args.epochs):
 
             train_loss, train_prec1, train_prec5, lr, _step, \
                 T, train_loss_ind, train_loss_prod, \
-                grad_mean, grad_std = train(train_loader, model, criterion, optimizer, epoch,
+                grad_mean, grad_std, weights = train(train_loader, model, criterion, optimizer, epoch,
                                                            args.num_classes, args.likelihood, _step,
                                                            fun_schedule_T, args.alpha, args.ensemble_type, 
                                                            train_prec1, C_mono=args.C_mono, mono_penal=args.mono_penal, 
                                                            stop_grad=args.stop_grad, temp_diff=args.temp_diff, 
-                                                           clip_grad=args.clip_grad, loss_type=args.loss_type)
+                                                           clip_grad=args.clip_grad, loss_type=args.loss_type, ens_weights=weights)
         
             run.log({'train_loss': train_loss.avg})
             run.log({'train_prec1': train_prec1[-1].avg})
@@ -180,9 +192,13 @@ def main():
             run.log({'grad_std': grad_std})
             run.log({'T': T})
             run.log({'lr': lr})
+            if args.fit_ens_weights:
+                wandb.log({f'weight_{idx}': weight_value for idx, weight_value in enumerate(weights.detach().cpu().numpy())})
+                print('weights', weights)
 
             val_loss, val_prec1, val_prec5 = validate(val_loader, model, criterion,
-                                                      args.num_classes, args.likelihood, _step, fun_schedule_T, loss_type=args.loss_type, act_func=args.prod_act_func)
+                                                      args.num_classes, args.likelihood, _step, fun_schedule_T, 
+                                                      loss_type=args.loss_type, act_func=args.prod_act_func, ens_weights=weights)
 
             run.log({'val_loss': val_loss})
             run.log({'val_prec1': val_prec1})
@@ -212,12 +228,14 @@ def main():
         ### Test the final model
 
         print('********** Final prediction results **********')
-        validate(test_loader, model, criterion, args.num_classes, args.likelihood, _step, fun_schedule_T, loss_type=args.loss_type, act_func=args.prod_act_func)
+        validate(test_loader, model, criterion, args.num_classes, args.likelihood, _step, 
+                 fun_schedule_T, loss_type=args.loss_type, act_func=args.prod_act_func, ens_weights=weights)
 
         return
 
 def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelihood, step, step_func=None, 
-          alpha=0., ensemble_type="DE", train_prec1=None, C_mono=0., mono_penal=0., stop_grad=False, temp_diff=False, clip_grad=0., loss_type='standard'):
+          alpha=0., ensemble_type="DE", train_prec1=None, C_mono=0., mono_penal=0., stop_grad=False, temp_diff=False, clip_grad=0., 
+          loss_type='standard', ens_weights=None):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -270,10 +288,12 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
                 # stop_grad for previous logits
                 if stop_grad:
                     _logits = torch.stack([output[i].detach() for i in range(j)] + [output[j]], dim=0) 
+                elif ens_weights is not None:
+                    _logits = torch.stack([output[i].detach() for i in range(j + 1)], dim=0) 
                 else:
                     _logits = torch.stack(output[:j+1], dim=0) 
 
-            loss += criterion(_logits, target_var[j])
+            loss += criterion(_logits, target_var[j], weights=ens_weights[:j + 1])
             
 
         losses.update(loss.item(), input.size(0))
@@ -287,7 +307,11 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
         optimizer.zero_grad()
         loss.backward()
         if i == 0:
-            grad_mean, grad_stat = get_grad_stats(model)
+            if ens_weights is None:
+                grad_mean, grad_stat = get_grad_stats(model)
+            else:
+                grad_mean, grad_stat = 0., 0.
+        
 
         if clip_grad > 0.:
             clip_grad_norm_(model.parameters(), clip_grad)
@@ -310,9 +334,9 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
                     loss=losses, top1=top1[-1], top5=top5[-1], T=T))
         step += 1
 
-    return losses, top1, top5[-1].avg, running_lr, step, T, losses_individual.avg, losses_prod.avg, grad_mean, grad_stat
+    return losses, top1, top5[-1].avg, running_lr, step, T, losses_individual.avg, losses_prod.avg, grad_mean, grad_stat, ens_weights
 
-def validate(val_loader, model, criterion, num_classes, likelihood, step, step_func=None, loss_type='standard', act_func='relu'):
+def validate(val_loader, model, criterion, num_classes, likelihood, step, step_func=None, loss_type='standard', act_func='relu', ens_weights=None):
     batch_time = AverageMeter()
     losses = AverageMeter()
     data_time = AverageMeter()
@@ -350,7 +374,7 @@ def validate(val_loader, model, criterion, num_classes, likelihood, step, step_f
                     else:
                         # stop_grad for previous logits
                         _logits = torch.stack([output[i].detach() for i in range(j)] + [output[j]], dim=0) 
-                    loss += criterion(_logits, target_var)
+                    loss += criterion(_logits, target_var, weights=ens_weights[:j + 1])
                 elif likelihood == 'OVR':
                     if step_func is not None:
                         T = step_func(step)
@@ -494,6 +518,15 @@ def adjust_learning_rate(optimizer, epoch, args, batch=None,
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
     return lr
+
+def update_optimizer_state_dict(optimizer, checkpoint_optimizer_state_dict, weights=None):
+    if weights is not None:
+        optimizer_groups = checkpoint_optimizer_state_dict['param_groups']
+        for group in optimizer_groups:
+            group['params'].append(id(weights))
+        checkpoint_optimizer_state_dict['state'][id(weights)] = {}  # Initialize the state for the new parameter
+    
+    optimizer.load_state_dict(checkpoint_optimizer_state_dict)
 
 if __name__ == '__main__':
     main()

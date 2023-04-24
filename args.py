@@ -112,5 +112,6 @@ poe_group.add_argument('--schedule_T_end', default=16.0, type=float)
 poe_group.add_argument('--alpha', default=1.0, type=float)
 poe_group.add_argument('--prod_eps', default=1e-2, type=float)
 poe_group.add_argument('--prod_eps_log', default=1e-20, type=float)
-poe_group.add_argument('--prod_act_func', default='relu', type=str, choices=['relu', 'softplus'])
+poe_group.add_argument('--prod_act_func', default='relu', type=str, choices=['relu', 'softplus', 'exp'])
+arch_group.add_argument('--fit_ens_weights', default=False, type=bool)
 

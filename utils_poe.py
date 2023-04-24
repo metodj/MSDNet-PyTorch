@@ -135,18 +135,30 @@ class ModifiedSoftmaxCrossEntropyLossProd(nn.Module):
         super(ModifiedSoftmaxCrossEntropyLossProd, self).__init__()
         self.eps = eps
         self.eps_log = eps_log
-        assert act_func in ['relu', 'softplus']
+        assert act_func in ['relu', 'softplus', 'exp']
         if act_func == 'relu':
             self.act_func = torch.relu
         elif act_func == 'softplus':
             self.act_func = F.softplus
+        elif act_func == 'exp':
+            self.act_func = self.exp_stable
+
+    def exp_stable(self, x):
+        x_max = torch.max(x, dim=-1, keepdim=True)[0]
+        return torch.exp(x - x_max)
         
 
-    # TODO: explore further the effect of eps
-    def forward(self, logits, target):
+    def forward(self, logits, target, weights):
 
         # Apply activation function to logits
         logits = self.act_func(logits)
+
+        if weights is not None:
+            # Reshape weights to (L, 1, 1) for broadcasting
+            weights = weights.view(-1, 1, 1)
+
+            # Compute exp (w * log(logits))
+            logits = torch.exp(weights * torch.log(logits + self.eps_log))  # Add epsilon for numerical stability
 
         # Take product along axis=0
         prod_logits = torch.prod(logits, dim=0)
@@ -158,8 +170,7 @@ class ModifiedSoftmaxCrossEntropyLossProd(nn.Module):
         target_one_hot = torch.zeros_like(modified_softmax).scatter_(1, target.unsqueeze(1), 1)
 
         # Calculate the negative log-likelihood loss
-        loss = -torch.sum(target_one_hot * torch.log(modified_softmax + self.eps_log), dim=1)  # Add epsilon for numerical stability
-        # loss = -torch.sum(target_one_hot * modified_softmax, dim=1)  # Add epsilon for numerical stability
+        loss = -torch.sum(target_one_hot * torch.log(modified_softmax + self.eps_log), dim=1)
 
         # Calculate the average loss across the batch
         return torch.mean(loss)
