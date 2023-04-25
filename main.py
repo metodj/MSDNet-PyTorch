@@ -168,7 +168,7 @@ def main():
                                                            fun_schedule_T, args.alpha, args.ensemble_type, 
                                                            train_prec1, C_mono=args.C_mono, mono_penal=args.mono_penal, 
                                                            stop_grad=args.stop_grad, temp_diff=args.temp_diff, 
-                                                           clip_grad=args.clip_grad, loss_type=args.loss_type)
+                                                           clip_grad=args.clip_grad, loss_type=args.loss_type, start_epoch_lr=args.start_epoch,)
         
             run.log({'train_loss': train_loss.avg})
             run.log({'train_prec1': train_prec1[-1].avg})
@@ -217,7 +217,8 @@ def main():
         return
 
 def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelihood, step, step_func=None, 
-          alpha=0., ensemble_type="DE", train_prec1=None, C_mono=0., mono_penal=0., stop_grad=False, temp_diff=False, clip_grad=0., loss_type='standard'):
+          alpha=0., ensemble_type="DE", train_prec1=None, C_mono=0., mono_penal=0., stop_grad=False, temp_diff=False, 
+          clip_grad=0., loss_type='standard', start_epoch_lr=None):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -240,7 +241,8 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
     grad_mean, grad_std = None, None
     for i, (input, target) in enumerate(train_loader):
         lr = adjust_learning_rate(optimizer, epoch, args, batch=i,
-                                  nBatch=len(train_loader), method=args.lr_type)
+                                  nBatch=len(train_loader), method=args.lr_type, 
+                                  start_epoch_lr=start_epoch_lr)
 
         if running_lr is None:
             running_lr = lr
@@ -304,10 +306,10 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
                   'Loss {loss.val:.4f}\t'
                   'Acc@1 {top1.val:.4f}\t'
                   'Acc@5 {top5.val:.4f}\t'
-                   'T: {T}'.format(
+                   'lr: {lr}'.format(
                     epoch, i + 1, len(train_loader),
                     batch_time=batch_time, data_time=data_time,
-                    loss=losses, top1=top1[-1], top5=top5[-1], T=T))
+                    loss=losses, top1=top1[-1], top5=top5[-1], lr=lr))
         step += 1
 
     return losses, top1, top5[-1].avg, running_lr, step, T, losses_individual.avg, losses_prod.avg, grad_mean, grad_stat
@@ -477,7 +479,7 @@ def zero_prob_collapse(output, act_func='relu'):
     return res
 
 def adjust_learning_rate(optimizer, epoch, args, batch=None,
-                         nBatch=None, method='multistep'):
+                         nBatch=None, method='multistep', start_epoch_lr=None):
     if method == 'cosine':
         T_total = args.epochs * nBatch
         T_cur = (epoch % args.epochs) * nBatch + batch
@@ -490,7 +492,9 @@ def adjust_learning_rate(optimizer, epoch, args, batch=None,
             elif epoch >= args.epochs * 0.5:
                 lr *= decay_rate
         else:
-            lr = args.lr * (0.1 ** (epoch // 30))
+            if start_epoch_lr is None:
+                start_epoch_lr = 0.
+            lr = args.lr * (0.1 ** ((epoch - start_epoch_lr) // 30))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
     return lr
