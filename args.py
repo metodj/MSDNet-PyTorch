@@ -41,9 +41,9 @@ data_group.add_argument('--use-valid', action='store_true',
                         help='use validation set or not')
 data_group.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                         help='number of data loading workers (default: 4)')
-data_group.add_argument('--image-net-train', default='train',
+data_group.add_argument('--image_net_train', default='train',
                         help='path to dataset (default: data)')
-data_group.add_argument('--image-net-val', default='val',
+data_group.add_argument('--image_net_val', default='val',
                         help='path to dataset (default: data)')
 
 # model arch related
