@@ -159,6 +159,10 @@ def main():
 
         _step = 0
         train_prec1 = None
+        if args.restart_lr:
+            _start_epoch_lr = args.start_epoch
+        else:
+            _start_epoch_lr = 0.
         for epoch in range(args.start_epoch, args.epochs):
 
             train_loss, train_prec1, train_prec5, lr, _step, \
@@ -168,7 +172,7 @@ def main():
                                                            fun_schedule_T, args.alpha, args.ensemble_type, 
                                                            train_prec1, C_mono=args.C_mono, mono_penal=args.mono_penal, 
                                                            stop_grad=args.stop_grad, temp_diff=args.temp_diff, 
-                                                           clip_grad=args.clip_grad, loss_type=args.loss_type, start_epoch_lr=args.start_epoch,)
+                                                           clip_grad=args.clip_grad, loss_type=args.loss_type, start_epoch_lr=_start_epoch_lr)
         
             run.log({'train_loss': train_loss.avg})
             run.log({'train_prec1': train_prec1[-1].avg})

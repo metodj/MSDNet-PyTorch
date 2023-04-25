@@ -113,4 +113,5 @@ poe_group.add_argument('--alpha', default=1.0, type=float)
 poe_group.add_argument('--prod_eps', default=1e-2, type=float)
 poe_group.add_argument('--prod_eps_log', default=1e-20, type=float)
 poe_group.add_argument('--prod_act_func', default='relu', type=str, choices=['relu', 'softplus'])
+arch_group.add_argument('--restart_lr', default=False, type=bool)
 
