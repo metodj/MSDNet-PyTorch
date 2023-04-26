@@ -82,7 +82,7 @@ def main():
         'project': 'anytime-poe-msdnet',
         'entity': 'metodj',
         'notes': '',
-        'mode': 'online',
+        'mode': 'offline',
         'config': vars(args)
     }
     with wandb.init(**wandb_kwargs) as run:
@@ -118,7 +118,8 @@ def main():
         wandb.watch(model, log='gradients', log_freq=500)
         if args.fit_ens_weights:
             L = 7
-            weights = torch.ones(L, requires_grad=True).cuda()
+            # weights = torch.ones(L, requires_grad=True).cuda()
+            weights = torch.tensor(np.linspace(1, L /2, L), requires_grad=True).cuda()
             weights = nn.Parameter(weights)
             optimizer = torch.optim.SGD(list(model.parameters()) + [weights], args.lr,
                                     momentum=args.momentum,
@@ -328,10 +329,10 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
                   'Loss {loss.val:.4f}\t'
                   'Acc@1 {top1.val:.4f}\t'
                   'Acc@5 {top5.val:.4f}\t'
-                   'T: {T}'.format(
+                   'lr: {lr}'.format(
                     epoch, i + 1, len(train_loader),
                     batch_time=batch_time, data_time=data_time,
-                    loss=losses, top1=top1[-1], top5=top5[-1], T=T))
+                    loss=losses, top1=top1[-1], top5=top5[-1], lr=lr))
         step += 1
 
     return losses, top1, top5[-1].avg, running_lr, step, T, losses_individual.avg, losses_prod.avg, grad_mean, grad_stat, ens_weights
