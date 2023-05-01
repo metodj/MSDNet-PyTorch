@@ -272,13 +272,18 @@ def f_probs_ovr_poe_logits_weighted_generalized(logits, threshold=0.0, weights=N
     return probs
 
 
-def get_logits_targets(dataset, model_folder, likelihood, epoch, cuda=True, ood_dataset=None):
+def get_logits_targets(dataset, model_folder, likelihood, epoch, cuda=True, logits_type: str = 'test'):
     assert dataset in ["cifar10", "cifar100"]
+    assert logits_type in ['train', 'test', 'val']
     ARGS = parse_args()
     ARGS.data_root = "data"
     ARGS.data = dataset
+    if dataset == "cifar10":
+        folder_path = 'models_cifar_10'
+    else:
+        folder_path = 'models'
     ARGS.save = (
-        f"models/{model_folder}"
+        f"/home/metod/Desktop/PhD/year1/PoE/MSDNet-PyTorch/{folder_path}/{model_folder}"
     )
     ARGS.arch = "msdnet"
     ARGS.batch_size = 64
@@ -296,10 +301,10 @@ def get_logits_targets(dataset, model_folder, likelihood, epoch, cuda=True, ood_
 
     # load pre-trained model
     model = MSDNet(args=ARGS)
-    model_path = f"models/{model_folder}/save_models/checkpoint_{epoch}.pth.tar"
+    model_path = f"{folder_path}/{model_folder}/save_models/checkpoint_{epoch}.pth.tar"
     if cuda:
         state = torch.load(model_path)
-    else:
+    else: 
         state = torch.load(model_path, map_location=torch.device('cpu'))
     params = OrderedDict()
     for params_name, params_val in state["state_dict"].items():
@@ -311,106 +316,22 @@ def get_logits_targets(dataset, model_folder, likelihood, epoch, cuda=True, ood_
     model.eval()
 
     # data
-    if ood_dataset is not None:
-        ARGS.data = ood_dataset
-    _, _, test_loader = get_dataloaders(ARGS)
+    if logits_type == 'test':
+        _, _, _loader = get_dataloaders(ARGS)
+    elif logits_type == 'val':
+        _, _loader, _ = get_dataloaders(ARGS)
+    elif logits_type == 'train':
+        _loader, _, _ = get_dataloaders(ARGS)
+    else:
+        raise ValueError(f'logits_type={logits_type} not supported')
 
     logits = []
     targets = []
     with torch.no_grad():
-        for i, (x, y) in enumerate(test_loader):
+        for i, (x, y) in enumerate(_loader):
             if cuda:
                 y = y.cuda(device=None)
                 x = x.cuda()
-
-            input_var = torch.autograd.Variable(x)
-            target_var = torch.autograd.Variable(y)
-
-            output = model(input_var)
-            if not isinstance(output, list):
-                output = [output]
-
-            logits.append(torch.stack(output))
-            targets.append(target_var)
-
-    logits = torch.cat(logits, dim=1).cpu()
-    targets = torch.cat(targets).cpu()
-
-    return logits, targets, ARGS
-
-
-def get_logits_targets_image_net(step=4):
-    assert step in [4, 7]
-    if step == 4:
-        ARGS = parse_args()
-        ARGS.data_root = "data"
-        ARGS.data = "ImageNet"
-        ARGS.save = f"outputs/image_net"
-        ARGS.arch = "msdnet"
-        ARGS.batch_size = 64
-        ARGS.epochs = 90
-        ARGS.nBlocks = 5
-        ARGS.stepmode = "even"
-        ARGS.base = 4
-        ARGS.nChannels = 32
-        ARGS.growthRate = 16
-        ARGS.bnFactor = [1, 2, 4, 4]
-        ARGS.grFactor = [1, 2, 4, 4]
-        ARGS.j = 16
-        ARGS.num_classes = 1000
-        ARGS.step = 4
-        ARGS.use_valid = True
-        ARGS.splits = ["train", "val", "test"]
-        ARGS.likelihood = "softmax"
-        ARGS.nScales = len(ARGS.grFactor)
-        MODEL_PATH = f"image_net/msdnet-step=4-block=5.pth.tar"
-    elif step == 7:
-        ARGS = parse_args()
-        ARGS.data_root = "data"
-        ARGS.data = "ImageNet"
-        ARGS.save = f"outputs/image_net"
-        ARGS.arch = "msdnet"
-        ARGS.batch_size = 64
-        ARGS.epochs = 90
-        ARGS.nBlocks = 5
-        ARGS.stepmode = "even"
-        ARGS.base = 7
-        ARGS.nChannels = 32
-        ARGS.growthRate = 16
-        ARGS.bnFactor = [1, 2, 4, 4]
-        ARGS.grFactor = [1, 2, 4, 4]
-        ARGS.j = 16
-        ARGS.num_classes = 1000
-        ARGS.step = 7
-        ARGS.use_valid = True
-        ARGS.splits = ["train", "val", "test"]
-        ARGS.likelihood = "softmax"
-        ARGS.nScales = len(ARGS.grFactor)
-        MODEL_PATH = f"image_net/msdnet-step=7-block=5.pth.tar"
-
-    # load pre-trained model
-    model = MSDNet(args=ARGS)
-    state = torch.load(MODEL_PATH)
-    params = OrderedDict()
-    for params_name, params_val in state["state_dict"].items():
-        params[params_name.replace("module.", "")] = params_val
-        # state['state_dict'][params_name.replace('module.', '')] = state['state_dict'].pop(params_name)
-    model.load_state_dict(params)
-    model = model.cuda()
-    model.eval()
-
-    model_parameters = filter(lambda p: p.requires_grad, model.parameters())
-    params = sum([np.prod(p.size()) for p in model_parameters])
-    print(f"nr. of trainable params: {params}")
-
-    val_loader =get_image_net_val_loader(ARGS)
-
-    logits = []
-    targets = []
-    with torch.no_grad():
-        for i, (x, y) in tqdm(enumerate(val_loader)):
-            y = y.cuda(device=None)
-            x = x.cuda()
 
             input_var = torch.autograd.Variable(x)
             target_var = torch.autograd.Variable(y)
@@ -691,3 +612,121 @@ def f_probs_pa_softplus(logits, weights=None, break_ties=False):
     else:
         probs = probs / np.repeat(probs.sum(axis=2)[:, :, np.newaxis], C, axis=2)
     return probs
+
+
+def f_probs_pa_softplus(logits, weights=None, break_ties=False):
+    L, N, C = logits.shape[0], logits.shape[1], logits.shape[2]
+    probs = F.softplus(logits.clone()).numpy()
+    if weights is not None:
+        assert logits.shape[0] == weights.shape[0]
+        for l in range(L):
+            probs[l, :, :] = probs[l, :, :] ** weights[l]
+    probs = np.cumprod(probs, axis=0)
+    # normalize
+    if break_ties:
+        for l in range(L):
+            for n in range(N):
+                sum_l_n = probs[l, n, :].sum()
+                if sum_l_n > 0.:
+                    probs[l, n, :] = probs[l, n, :] / sum_l_n
+                else:
+                    # probs[l, n, :] = (1 / C) * torch.ones(C)
+                    # probs[l, n, :] = torch.zeros(C)
+                    probs[l, n, :] = torch.softmax(logits[l, n, :], dim=0)
+                    # probs[l, n, :] = (logits[:l + 1, n, :] > 0).sum(axis=0) / (logits[:l + 1, n, :] > 0).sum()
+    else:
+        probs = probs / np.repeat(probs.sum(axis=2)[:, :, np.newaxis], C, axis=2)
+    return probs
+
+
+def get_logits_targets_image_net(step=4, model_path='image_net', model_name: Optional[str]=None, n_blocks: int=5):
+    assert step in [4, 7]
+    if step == 4:
+        ARGS = parse_args()
+        ARGS.data_root = "data"
+        ARGS.data = "ImageNet"
+        ARGS.save = f"/home/metod/Desktop/PhD/year1/PoE/MSDNet-PyTorch/{model_path}"
+        ARGS.arch = "msdnet"
+        ARGS.batch_size = 64
+        ARGS.epochs = 90
+        ARGS.nBlocks = n_blocks
+        ARGS.stepmode = "even"
+        ARGS.base = 4
+        ARGS.nChannels = 32
+        ARGS.growthRate = 16
+        ARGS.bnFactor = [1, 2, 4, 4]
+        ARGS.grFactor = [1, 2, 4, 4]
+        ARGS.j = 16
+        ARGS.num_classes = 1000
+        ARGS.step = 4
+        ARGS.use_valid = True
+        ARGS.splits = ["train", "val", "test"]
+        ARGS.likelihood = "softmax"
+        ARGS.nScales = len(ARGS.grFactor)
+        if model_name is None:
+            MODEL_PATH = f"image_net/msdnet-step=4-block=5.pth.tar"
+        else:
+            MODEL_PATH = f"{model_path}/{model_name}"
+    elif step == 7:
+        ARGS = parse_args()
+        ARGS.data_root = "data"
+        ARGS.data = "ImageNet"
+        ARGS.save = f"/home/metod/Desktop/PhD/year1/PoE/MSDNet-PyTorch/{model_path}"
+        ARGS.arch = "msdnet"
+        ARGS.batch_size = 64
+        ARGS.epochs = 90
+        ARGS.nBlocks = n_blocks
+        ARGS.stepmode = "even"
+        ARGS.base = 7
+        ARGS.nChannels = 32
+        ARGS.growthRate = 16
+        ARGS.bnFactor = [1, 2, 4, 4]
+        ARGS.grFactor = [1, 2, 4, 4]
+        ARGS.j = 16
+        ARGS.num_classes = 1000
+        ARGS.step = 7
+        ARGS.use_valid = True
+        ARGS.splits = ["train", "val", "test"]
+        ARGS.likelihood = "softmax"
+        ARGS.nScales = len(ARGS.grFactor)
+        assert model_name is None
+        MODEL_PATH = f"image_net/msdnet-step=7-block=5.pth.tar"
+
+    # load pre-trained model
+    model = MSDNet(args=ARGS)
+    state = torch.load(MODEL_PATH)
+    params = OrderedDict()
+    for params_name, params_val in state["state_dict"].items():
+        params[params_name.replace("module.", "")] = params_val
+        # state['state_dict'][params_name.replace('module.', '')] = state['state_dict'].pop(params_name)
+    model.load_state_dict(params)
+    model = model.cuda()
+    model.eval()
+
+    model_parameters = filter(lambda p: p.requires_grad, model.parameters())
+    params = sum([np.prod(p.size()) for p in model_parameters])
+    print(f"nr. of trainable params: {params}")
+
+    val_loader = get_image_net_val_loader(ARGS)
+
+    logits = []
+    targets = []
+    with torch.no_grad():
+        for i, (x, y) in tqdm(enumerate(val_loader)):
+            y = y.cuda(device=None)
+            x = x.cuda()
+
+            input_var = torch.autograd.Variable(x)
+            target_var = torch.autograd.Variable(y)
+
+            output = model(input_var)
+            if not isinstance(output, list):
+                output = [output]
+
+            logits.append(torch.stack(output))
+            targets.append(target_var)
+
+    logits = torch.cat(logits, dim=1).cpu()
+    targets = torch.cat(targets).cpu()
+
+    return logits, targets, ARGS
