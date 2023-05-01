@@ -390,7 +390,7 @@ def get_logits_targets(dataset, model_folder, likelihood, epoch, cuda=True, logi
     return logits, targets, ARGS
 
 
-def get_logits_targets_image_net(step=4, model_path='image_net', model_name: Optional[str]=None):
+def get_logits_targets_image_net(step=4, model_path='image_net', model_name: Optional[str]=None, n_blocks: int=5):
     assert step in [4, 7]
     if step == 4:
         ARGS = parse_args()
@@ -400,7 +400,7 @@ def get_logits_targets_image_net(step=4, model_path='image_net', model_name: Opt
         ARGS.arch = "msdnet"
         ARGS.batch_size = 64
         ARGS.epochs = 90
-        ARGS.nBlocks = 5
+        ARGS.nBlocks = n_blocks
         ARGS.stepmode = "even"
         ARGS.base = 4
         ARGS.nChannels = 32
@@ -426,7 +426,7 @@ def get_logits_targets_image_net(step=4, model_path='image_net', model_name: Opt
         ARGS.arch = "msdnet"
         ARGS.batch_size = 64
         ARGS.epochs = 90
-        ARGS.nBlocks = 5
+        ARGS.nBlocks = n_blocks
         ARGS.stepmode = "even"
         ARGS.base = 7
         ARGS.nChannels = 32
