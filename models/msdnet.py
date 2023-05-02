@@ -17,7 +17,6 @@ class ConvBasic(nn.Module):
     def forward(self, x):
         return self.net(x)
 
-
 class ConvBN(nn.Module):
     def __init__(self, nIn, nOut, type: str, bottleneck,
                  bnWidth):
@@ -57,7 +56,6 @@ class ConvBN(nn.Module):
 
         return self.net(x)
 
-
 class ConvDownNormal(nn.Module):
     def __init__(self, nIn1, nIn2, nOut, bottleneck, bnWidth1, bnWidth2):
         super(ConvDownNormal, self).__init__()
@@ -71,7 +69,6 @@ class ConvDownNormal(nn.Module):
                self.conv_down(x[0]),
                self.conv_normal(x[1])]
         return torch.cat(res, dim=1)
-
 
 class ConvNormal(nn.Module):
     def __init__(self, nIn, nOut, bottleneck, bnWidth):
@@ -99,7 +96,8 @@ class MSDNFirstLayer(nn.Module):
                     nn.Conv2d(nIn, nOut * args.grFactor[0], 7, 2, 3),
                     nn.BatchNorm2d(nOut * args.grFactor[0]),
                     nn.ReLU(inplace=True),
-                    nn.MaxPool2d(3, 2, 1))
+                    nn.MaxPool2d(3, 2, 1)
+                    )
             self.layers.append(conv)
 
         nIn = nOut * args.grFactor[0]
@@ -168,7 +166,6 @@ class MSDNLayer(nn.Module):
 
         return res
 
-
 class ParallelModule(nn.Module):
     """
     This module is similar to luatorch's Parallel Table
@@ -186,7 +183,6 @@ class ParallelModule(nn.Module):
             res.append(self.m[i](x[i]))
 
         return res
-
 
 class ClassifierModule(nn.Module):
     def __init__(self, m, channel, num_classes):
@@ -242,7 +238,7 @@ class MSDNet(nn.Module):
                         self._build_classifier_cifar(nIn * args.grFactor[-1], 200, pool_factor=4))
                 elif args.tiny_imagenet_model == 'imagenet':
                     self.classifier.append(
-                        self._build_classifier_imagenet(nIn * args.grFactor[-1], 200))
+                        self._build_classifier_imagenet(nIn * args.grFactor[-1], 200, stride=1))
                 else:
                     raise NotImplementedError
             else:
@@ -332,10 +328,10 @@ class MSDNet(nn.Module):
         )
         return ClassifierModule(conv, interChannels2, num_classes)
 
-    def _build_classifier_imagenet(self, nIn, num_classes):
+    def _build_classifier_imagenet(self, nIn, num_classes, stride=2):
         conv = nn.Sequential(
-            ConvBasic(nIn, nIn, kernel=3, stride=2, padding=1),
-            ConvBasic(nIn, nIn, kernel=3, stride=2, padding=1),
+            ConvBasic(nIn, nIn, kernel=3, stride=stride, padding=1),
+            ConvBasic(nIn, nIn, kernel=3, stride=stride, padding=1),
             nn.AvgPool2d(2)
         )
         return ClassifierModule(conv, nIn, num_classes)
@@ -344,6 +340,7 @@ class MSDNet(nn.Module):
         res = []
         for i in range(self.nBlocks):
             x = self.blocks[i](x)
-            res.append(self.classifier[i](x))
+            c = self.classifier[i](x)
+            res.append(c)
         return res
 
