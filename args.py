@@ -33,7 +33,7 @@ exp_group.add_argument('--pretrained_epoch', default='150', type=str,
 # dataset related
 data_group = arg_parser.add_argument_group('data', 'dataset setting')
 data_group.add_argument('--data', metavar='D', default='cifar10',
-                        choices=['cifar10', 'cifar100', 'ImageNet'],
+                        choices=['cifar10', 'cifar100', 'ImageNet', 'tiny-imagenet'],
                         help='data to work on')
 data_group.add_argument('--data-root', metavar='DIR', default='data',
                         help='path to dataset (default: data)')

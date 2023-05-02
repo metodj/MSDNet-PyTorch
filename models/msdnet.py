@@ -239,7 +239,7 @@ class MSDNet(nn.Module):
             elif args.data == 'tiny-imagenet':
                 if args.tiny_imagenet_model == 'cifar':
                     self.classifier.append(
-                        self._build_classifier_cifar(nIn * args.grFactor[-1], 200))
+                        self._build_classifier_cifar(nIn * args.grFactor[-1], 200, pool_factor=4))
                 elif args.tiny_imagenet_model == 'imagenet':
                     self.classifier.append(
                         self._build_classifier_imagenet(nIn * args.grFactor[-1], 200))
@@ -324,12 +324,11 @@ class MSDNet(nn.Module):
                                  kernel=1, stride=1, padding=0))
         return ParallelModule(net)
 
-    def _build_classifier_cifar(self, nIn, num_classes):
-        interChannels1, interChannels2 = 128, 128
+    def _build_classifier_cifar(self, nIn, num_classes, interChannels1=128, interChannels2=128, pool_factor=2):
         conv = nn.Sequential(
             ConvBasic(nIn, interChannels1, kernel=3, stride=2, padding=1),
             ConvBasic(interChannels1, interChannels2, kernel=3, stride=2, padding=1),
-            nn.AvgPool2d(2),
+            nn.AvgPool2d(pool_factor),
         )
         return ClassifierModule(conv, interChannels2, num_classes)
 

@@ -3,3 +3,4 @@ torchvision==0.8.0
 numpy==1.23.5
 wandb==0.13.9
 plotly==5.12.0
+datasets==2.12.0
