@@ -2,7 +2,13 @@ import torch
 import torchvision.datasets as dset
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
+from datasets import load_dataset
 import os
+
+
+class TransposeImage:
+    def __call__(self, img):
+        return img.transpose((2, 0, 1))
 
 
 def get_dataloaders(args, normalize=True):
@@ -45,6 +51,43 @@ def get_dataloaders(args, normalize=True):
                                         transforms.ToTensor(),
                                         normalize
                                     ]), download=True)
+        
+    elif args.data == 'tiny-imagenet':
+        tiny_imagenet_train = load_dataset('Maysee/tiny-imagenet', split='train')
+        tiny_imagenet_val = load_dataset('Maysee/tiny-imagenet', split='valid')
+
+        if normalize:
+            normalize = transforms.Normalize(mean=[0.4835, 0.4442, 0.3912], 
+                                             std=[0.2613, 0.2520, 0.2642])
+        else:
+            normalize = transforms.Normalize(mean=[0., 0., 0.],
+                                            std=[1., 1., 1.])
+
+        train_transform = transforms.Compose([
+            transforms.RandomResizedCrop(64),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            normalize
+        ])
+
+        val_transform = transforms.Compose([
+            transforms.Resize(64),
+            transforms.CenterCrop(64),
+            transforms.ToTensor(),
+            normalize
+        ])
+
+        train_set = []
+        for x in tiny_imagenet_train:
+            if x['image'].mode != 'RGB':
+                x['image'] = x['image'].convert('RGB')
+            train_set.append((train_transform(x['image']), x['label']))
+
+        val_set = []
+        for x in tiny_imagenet_val:
+            if x['image'].mode != 'RGB':
+                x['image'] = x['image'].convert('RGB')
+            val_set.append((val_transform(x['image']), x['label']))
     else:
         # ImageNet
         traindir = os.path.join(args.data_root, args.image_net_train)
@@ -75,7 +118,7 @@ def get_dataloaders(args, normalize=True):
         else:
             print('!!!!!! Save train_set_index !!!!!!')
             torch.save(train_set_index, os.path.join(args.save, 'index.pth'))
-        if args.data.startswith('cifar'):
+        if args.data.startswith('cifar') or args.data == 'tiny-imagenet':
             num_sample_valid = 5000
         else:
             num_sample_valid = 50000

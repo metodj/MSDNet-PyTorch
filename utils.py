@@ -21,6 +21,8 @@ def parse_args():
         args.num_classes = 10
     elif args.data == 'cifar100':
         args.num_classes = 100
+    elif args.data == 'tiny-imagenet':
+        args.num_classes = 200
     else:
         args.num_classes = 1000
 
