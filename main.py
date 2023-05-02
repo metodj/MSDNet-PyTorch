@@ -40,6 +40,8 @@ if args.data == 'cifar10':
     args.num_classes = 10
 elif args.data == 'cifar100':
     args.num_classes = 100
+elif args.data == 'tiny-imagenet':
+    args.num_classes = 200
 else:
     args.num_classes = 1000
 
@@ -66,6 +68,8 @@ def main():
 
     if args.data.startswith('cifar'):
         IM_SIZE = 32
+    elif args.data == 'tiny-imagenet':
+        IM_SIZE = 64
     else:
         IM_SIZE = 224
 

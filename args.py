@@ -69,6 +69,8 @@ arch_group.add_argument('--grFactor', default='1-2-4', type=str)
 arch_group.add_argument('--prune', default='max', choices=['min', 'max'])
 arch_group.add_argument('--bnFactor', default='1-2-4')
 arch_group.add_argument('--bottleneck', default=True, type=bool)
+arch_group.add_argument('--tiny_imagenet_model', default='cifar', type=str, choices=['cifar', 'imagenet'])
+
 
 
 # training related

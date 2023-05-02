@@ -6,11 +6,6 @@ from datasets import load_dataset
 import os
 
 
-class TransposeImage:
-    def __call__(self, img):
-        return img.transpose((2, 0, 1))
-
-
 def get_dataloaders(args, normalize=True):
     train_loader, val_loader, test_loader = None, None, None
     if args.data == 'cifar10':

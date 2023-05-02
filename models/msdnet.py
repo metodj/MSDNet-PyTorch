@@ -91,10 +91,10 @@ class MSDNFirstLayer(nn.Module):
     def __init__(self, nIn, nOut, args):
         super(MSDNFirstLayer, self).__init__()
         self.layers = nn.ModuleList()
-        if args.data.startswith('cifar'):
+        if args.data.startswith('cifar') or ((args.data == 'tiny-imagenet') and (args.tiny_imagenet_model == 'cifar')):
             self.layers.append(ConvBasic(nIn, nOut * args.grFactor[0],
                                          kernel=3, stride=1, padding=1))
-        elif args.data == 'ImageNet':
+        elif args.data == 'ImageNet' or ((args.data == 'tiny-imagenet') and (args.tiny_imagenet_model == 'imagenet')):
             conv = nn.Sequential(
                     nn.Conv2d(nIn, nOut * args.grFactor[0], 7, 2, 3),
                     nn.BatchNorm2d(nOut * args.grFactor[0]),
@@ -236,6 +236,15 @@ class MSDNet(nn.Module):
             elif args.data == 'ImageNet':
                 self.classifier.append(
                     self._build_classifier_imagenet(nIn * args.grFactor[-1], 1000))
+            elif args.data == 'tiny-imagenet':
+                if args.tiny_imagenet_model == 'cifar':
+                    self.classifier.append(
+                        self._build_classifier_cifar(nIn * args.grFactor[-1], 200))
+                elif args.tiny_imagenet_model == 'imagenet':
+                    self.classifier.append(
+                        self._build_classifier_imagenet(nIn * args.grFactor[-1], 200))
+                else:
+                    raise NotImplementedError
             else:
                 raise NotImplementedError
 
