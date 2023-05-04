@@ -288,9 +288,9 @@ def f_probs_ovr_poe_logits_weighted_generalized(logits, threshold=0.0, weights=N
     return probs
 
 
-def f_probs_pa_softplus(logits, weights=None, break_ties=False):
+def f_probs_pa_softplus(logits, weights=None, break_ties=False, beta=1.):
     L, N, C = logits.shape[0], logits.shape[1], logits.shape[2]
-    probs = F.softplus(logits.clone()).numpy()
+    probs = F.softplus(logits.clone(), beta=beta).numpy()
     if weights is not None:
         assert logits.shape[0] == weights.shape[0]
         for l in range(L):
