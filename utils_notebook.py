@@ -904,3 +904,35 @@ def get_metrics_for_paper(logits: torch.Tensor, targets: torch.Tensor, model_nam
         mono_ground_truth_dict[_name] = [round(x, 4) for x in modal_probs_decreasing(targets, _probs, layer=None, N=N, thresholds=thresholds, diffs_type="all").values()]
 
     return acc_dict, mono_modal_dict, mono_ground_truth_dict
+
+
+def merge_dicts(data):
+    merged = {}
+    for d in data:
+        for key, value in d.items():
+            if key not in merged:
+                merged[key] = []
+            merged[key].append(value)
+    
+    result = {}
+    for key, value_lists in merged.items():
+        avg_values = [np.mean(values).round(4) for values in zip(*value_lists)]
+        std_values = [np.std(values).round(4) for values in zip(*value_lists)]
+        result[key] = (avg_values, std_values)
+    
+    return result
+
+def get_metrics_with_error_bars(model_name: str, dataset: str, model_list: List):
+    acc_res, mono_modal_res, mono_correct_res = [], [], []
+    for _model, _epoch in model_list:
+        logits, targets, _ = get_logits_targets(dataset, _model, 'softmax', _epoch, cuda=False)
+        acc, mono_modal, mono_correct = get_metrics_for_paper(logits, targets, model_name=model_name)
+        acc_res.append(acc)
+        mono_modal_res.append(mono_modal)
+        mono_correct_res.append(mono_correct)
+
+    acc_res = merge_dicts(acc_res)
+    mono_modal_res = merge_dicts(mono_modal_res)
+    mono_correct_res = merge_dicts(mono_correct_res)
+
+    return acc_res, mono_modal_res, mono_correct_res
