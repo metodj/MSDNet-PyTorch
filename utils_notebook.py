@@ -758,3 +758,31 @@ def get_metrics_for_paper(logits: torch.Tensor, targets: torch.Tensor, model_nam
         mono_ground_truth_dict[_name] = [round(x, 4) for x in modal_probs_decreasing(targets, _probs, layer=None, N=N, thresholds=thresholds, diffs_type="all").values()]
 
     return acc_dict, mono_modal_dict, mono_ground_truth_dict
+
+def moe_relu(logits, threshold=0.):
+    L, N, C = logits.shape[0], logits.shape[1], logits.shape[2]
+    probs = logits.numpy().copy()
+    probs[probs < threshold] = 0.0
+    probs = probs / np.repeat(probs.sum(axis=2)[:, :, np.newaxis], C, axis=2)
+    for n in range(N):
+        probs[:, n, :] = [np.mean(probs[:l + 1, n, :], axis=0) for l in range(L)]
+            
+    return probs
+
+
+
+def moe_relu_weighted(logits, threshold=0.0):
+    L, N, C = logits.shape
+    weights = {l: [(i + 1) / ((l + 1) * (l + 2) / 2) for i in range(l + 1)] for l in range(L)}
+    probs = logits.numpy().copy()
+    probs[probs < threshold] = 0.0
+    probs = probs / np.repeat(probs.sum(axis=2)[:, :, np.newaxis], C, axis=2)
+    
+    for n in range(N):
+        for l in range(L):
+            avg_weights = weights[l]
+            if len(avg_weights) != l + 1:
+                raise ValueError(f"Expected {l + 1} weights for level {l}, got {len(avg_weights)}")
+            probs[l, n, :] = np.average(probs[:l + 1, n, :], axis=0, weights=avg_weights)
+    
+    return probs
