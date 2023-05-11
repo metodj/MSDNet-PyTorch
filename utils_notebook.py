@@ -279,6 +279,7 @@ def f_probs_ovr_poe_logits_weighted_generalized(logits, threshold=0.0, weights=N
                 if sum_l_n > 0.:
                     probs[l, n, :] = probs[l, n, :] / sum_l_n
                 else:
+                    print("OOD: {} {}".format(l, n))
                     # probs[l, n, :] = (1 / C) * torch.ones(C)
                     # probs[l, n, :] = torch.zeros(C)
                     probs[l, n, :] = torch.softmax(logits[l, n, :], dim=0)
@@ -923,9 +924,14 @@ def merge_dicts(data):
     return result
 
 def get_metrics_with_error_bars(model_name: str, dataset: str, model_list: List):
+    assert dataset in ['cifar10', 'cifar100', 'ImageNet']
     acc_res, mono_modal_res, mono_correct_res = [], [], []
     for _model, _epoch in model_list:
-        logits, targets, _ = get_logits_targets(dataset, _model, 'softmax', _epoch, cuda=False)
+        if dataset != 'ImageNet':
+            logits, targets, _ = get_logits_targets(dataset, _model, 'softmax', _epoch, cuda=True)
+        else:
+            logits, targets, _ = get_logits_targets_image_net(model_path=f'models_image_net/{_model}/save_models', 
+                                                              model_name=f'checkpoint_0{_epoch}.pth.tar')
         acc, mono_modal, mono_correct = get_metrics_for_paper(logits, targets, model_name=model_name)
         acc_res.append(acc)
         mono_modal_res.append(mono_modal)
