@@ -10,7 +10,8 @@ from utils import parse_args
 from collections import OrderedDict
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-
+import random
+from utils_conformal import conformalize_anytime_nn_raps
 
 # TODO: most of the functions below have an ugly implementation with for loops, vectorize them
 
@@ -786,3 +787,58 @@ def moe_relu_weighted(logits, threshold=0.0):
             probs[l, n, :] = np.average(probs[:l + 1, n, :], axis=0, weights=avg_weights)
     
     return probs
+
+
+
+def get_uncertainty_with_error_bars(dataset: str, model_list):
+    assert dataset in ['cifar100']
+
+    random.seed(10)
+    CALIB_SIZE = 0.2
+    ALPHA = 0.05
+    
+    ent, ent_pa, ent_ca = [], [], []
+    conf, conf_pa, conf_ca = [], [], []
+    for _model, _epoch in model_list:
+        if dataset != 'ImageNet':
+            logits, targets, _ = get_logits_targets(dataset, _model, 'softmax', _epoch, cuda=True)
+        else:
+            raise NotImplementedError
+        
+
+        L, N = len(logits), len(targets)
+        calib_ids = random.sample(range(N), int(CALIB_SIZE * N))
+        valid_ids = list(set(range(N)) - set(calib_ids))
+        
+        probs = torch.softmax(logits, dim=2)
+        probs_pa = torch.tensor(f_probs_ovr_poe_logits_weighted_generalized(logits, weights=(np.arange(1, L + 1, 1, dtype=float) / L)))
+        probs_ca = anytime_caching(probs, N=N, L=L)
+
+        ent.append(scipy.stats.entropy(probs.numpy(), axis=2).mean(axis=1))
+        ent_pa.append(scipy.stats.entropy(probs_pa.numpy(), axis=2).mean(axis=1))   
+        ent_ca.append(scipy.stats.entropy(probs_ca.numpy(), axis=2).mean(axis=1)) 
+
+        sizes_conf_sets, _ = conformalize_anytime_nn_raps(probs.cpu().numpy(), targets, calib_ids=calib_ids, valid_ids=valid_ids, C=ARGS.num_classes, L=L)
+        sizes_conf_sets_pa, _ = conformalize_anytime_nn_raps(probs_pa.cpu().numpy(), targets, calib_ids=calib_ids, valid_ids=valid_ids, C=ARGS.num_classes, L=L)
+        sizes_conf_sets_ca, _ = conformalize_anytime_nn_raps(probs_ca.cpu().numpy(), targets, calib_ids=calib_ids, valid_ids=valid_ids, C=ARGS.num_classes, L=L)
+
+        conf.append(sizes_conf_sets)
+        conf_pa.append(sizes_conf_sets_pa)
+        conf_ca.append(sizes_conf_sets_ca)
+
+        
+
+    ent = np.array(ent)
+    ent_pa = np.array(ent_pa)
+    ent_ca = np.array(ent_ca)
+
+    conf = np.array(conf)
+    conf_pa = np.array(conf_pa)
+    conf_ca = np.array(conf_ca)
+
+    
+
+    return (ent.mean(axis=0), ent.std(axis=0)), (ent_pa.mean(axis=0), ent_pa.std(axis=0)), (ent_ca.mean(axis=0), ent_ca.std(axis=0)), \
+              (conf.mean(axis=0), conf.std(axis=0)), (conf_pa.mean(axis=0), conf_pa.std(axis=0)), (conf_ca.mean(axis=0), conf_ca.std(axis=0))
+
+
