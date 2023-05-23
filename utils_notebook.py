@@ -14,6 +14,7 @@ import torchvision.datasets as datasets
 from collections import OrderedDict, Counter
 from sklearn.linear_model import LogisticRegression
 from netcal.metrics import ECE, ACE
+import random
 
 
 # TODO: most of the functions below have an ugly implementation with for loops, vectorize them
@@ -942,3 +943,121 @@ def get_metrics_with_error_bars(model_name: str, dataset: str, model_list: List)
     mono_correct_res = merge_dicts(mono_correct_res)
 
     return acc_res, mono_modal_res, mono_correct_res
+
+
+def uncertainty_conditional(
+    arr: torch.Tensor,
+    N: int,
+    verbose: bool = False,
+    diffs_type: str = "all",
+    thresholds: List[float] = [-0.01, -0.05, -0.1, -0.2, -0.5],
+    return_ids: bool = False,
+    measure: str = 'entropy'
+) -> Dict[float, float]:
+    """
+    nr. of decreasing modal probability vectors in anytime-prediction regime
+
+    function can also be used for ground truth probabilities, set layer=None
+    """
+    nr_non_decreasing = {threshold: 0 for threshold in thresholds}
+    diffs = {threshold: [] for threshold in thresholds}
+    for i in range(N):
+        if measure == 'entropy':
+            measure_i = scipy.stats.entropy(arr[:, i, :].cpu().numpy(), axis=1)[::-1]
+        elif measure == 'conformal_sets':
+            measure_i = arr[i][::-1]
+        else:
+            raise ValueError()
+        if diffs_type == "consecutive":
+            diffs_i = np.diff(measure_i)
+        elif diffs_type == "all":
+            diffs_i = probs_decrease(measure_i)
+        else:
+            raise ValueError()
+        # diffs.append(diffs_i.min())
+        for threshold in nr_non_decreasing.keys():
+            if np.all(diffs_i >= threshold):
+                nr_non_decreasing[threshold] += 1
+            else:
+                diffs[threshold].append(i)
+                if verbose:
+                    print(i, measure_i)
+    # print(nr_non_decreasing)
+    # print(np.mean(diffs))
+    nr_decreasing = {
+        -1.0 * k: ((N - v) / N) * 100 for k, v in nr_non_decreasing.items()
+    }
+    if return_ids:
+        return nr_decreasing, diffs
+    else:
+        return nr_decreasing
+
+
+
+def conformalize_anytime_nn_raps_mod(
+    probs,
+    targets,
+    calib_ids,
+    valid_ids,
+    C: int,
+    L: int,
+    alpha=0.05,
+    lam_reg=0.01,
+    k_reg=5,
+    disallow_zero_sets=False,
+    rand=True,
+    seed=10,
+):
+    """
+    https://github.com/aangelopoulos/conformal-prediction/blob/main/notebooks/imagenet-raps.ipynb
+    """
+
+    random.seed(seed)
+
+    reg_vec = np.array(k_reg*[0,] + (C-k_reg)*[lam_reg,])[None,:]
+
+    sizes, coverages = [], []
+    for l in range(L):
+        cal_smx = probs[l, calib_ids, :]
+        cal_labels = targets[calib_ids].cpu().numpy()
+        n = len(cal_labels)
+
+        val_smx = probs[l, valid_ids, :]
+        valid_labels = targets[valid_ids].cpu().numpy()
+        n_valid = len(valid_labels)
+
+        # Get scores. calib_X.shape[0] == calib_Y.shape[0] == n
+        cal_pi = cal_smx.argsort(1)[:, ::-1]
+        cal_srt = np.take_along_axis(cal_smx, cal_pi, axis=1)
+        cal_srt_reg = cal_srt + reg_vec
+        cal_L = np.where(cal_pi == cal_labels[:, None])[1]
+        cal_scores = (
+            cal_srt_reg.cumsum(axis=1)[np.arange(n), cal_L]
+            - np.random.rand(n) * cal_srt_reg[np.arange(n), cal_L]
+        )
+        # Get the score quantile
+        qhat = np.quantile(
+            cal_scores, np.ceil((n + 1) * (1 - alpha)) / n, interpolation="higher"
+        )
+        # Deploy
+        n_val = val_smx.shape[0]
+        val_pi = val_smx.argsort(1)[:, ::-1]
+        val_srt = np.take_along_axis(val_smx, val_pi, axis=1)
+        val_srt_reg = val_srt + reg_vec
+        indicators = (
+            (val_srt_reg.cumsum(axis=1) - np.random.rand(n_val, 1) * val_srt_reg)
+            <= qhat
+            if rand
+            else val_srt_reg.cumsum(axis=1) - val_srt_reg <= qhat
+        )
+        if disallow_zero_sets:
+            indicators[:, 0] = True
+        conformal_sets = np.take_along_axis(indicators, val_pi.argsort(axis=1), axis=1)
+
+        print(l + 1, qhat)
+
+        sizes.append(conformal_sets.sum(axis=1))
+
+    return sizes, coverages
+
+
