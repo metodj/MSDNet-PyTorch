@@ -283,10 +283,7 @@ def f_probs_ovr_poe_logits_weighted_generalized(logits, threshold=0.0, weights=N
                     probs[l, n, :] = probs[l, n, :] / sum_l_n
                 else:
                     print("OOD: {} {}".format(l, n))
-                    # probs[l, n, :] = (1 / C) * torch.ones(C)
-                    # probs[l, n, :] = torch.zeros(C)
                     probs[l, n, :] = torch.softmax(logits[l, n, :], dim=0)
-                    # probs[l, n, :] = (logits[:l + 1, n, :] > 0).sum(axis=0) / (logits[:l + 1, n, :] > 0).sum()
     else:
         probs = probs / np.repeat(probs.sum(axis=2)[:, :, np.newaxis], C, axis=2)
     return probs
@@ -993,7 +990,6 @@ def uncertainty_conditional(
         return nr_decreasing, diffs
     else:
         return nr_decreasing
-
 
 
 def conformalize_anytime_nn_raps_mod(
