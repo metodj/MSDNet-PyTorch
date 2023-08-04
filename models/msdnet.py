@@ -199,6 +199,7 @@ class ClassifierModule(nn.Module):
         res = res.view(res.size(0), -1)
         return self.linear(res)
 
+
 class MSDNet(nn.Module):
     def __init__(self, args):
         super(MSDNet, self).__init__()
@@ -338,4 +339,17 @@ class MSDNet(nn.Module):
             x = self.blocks[i](x)
             res.append(self.classifier[i](x))
         return res
+
+
+class MSDNet_exit(MSDNet):
+    def __init__(self, args, exit):
+        super(MSDNet_exit, self).__init__(args)
+
+        assert 1 <= exit <= args.nBlocks, 'invalid exit block %d' % exit
+        self.exit = exit
+
+    def forward(self, x):
+        for i in range(self.exit):
+            x = self.blocks[i](x)
+        return self.classifier[self.exit  - 1](x)
 
