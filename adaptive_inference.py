@@ -7,21 +7,74 @@ import torch
 import torch.nn as nn
 import os
 import math
+from typing import Optional
+
+
+def anytime_product(
+    logits: torch.Tensor,
+    thres_min: float = 0.0,
+    weights: Optional[torch.Tensor] = None,
+    fall_back: bool = False,
+    thres_max: Optional[float] = None,
+    softplus: bool = False,
+) -> torch.Tensor:
+    """
+    logits: tensor of shape (L, N, C) where L is number of early exits,
+        N is number of test samples, C is number of classes
+    thres_min: threshold used in ReLU
+    weights: (L,) weights for each early exit
+    fall_back: if True, fall-back to a softmax predictive in case of
+        a collapse to a zero distribution
+    thres_max: threshold used for clipping logits from above
+    softplus: if True, use softplus instead of (modified) ReLU
+    """
+    L, N, _ = logits.shape
+    probs = logits.clone()
+
+    if not softplus:
+        if thres_max is not None:
+            probs = torch.clamp(probs, max=thres_max)
+        probs = torch.clamp(probs, min=thres_min)
+    else:
+        probs = torch.nn.functional.softplus(probs)
+
+    if weights is not None:
+        assert L == weights.shape[0], "Incompatible shapes between logits and weights"
+        probs = probs.pow(weights.view(L, 1, 1))
+
+    probs = torch.cumprod(probs, dim=0)
+
+    if fall_back:
+        sum_probs = probs.sum(dim=2, keepdim=True)
+        zeros_mask = sum_probs.eq(0.0)
+        probs = torch.where(zeros_mask, torch.softmax(logits, dim=2), probs / sum_probs)
+    else:
+        probs /= probs.sum(dim=2, keepdim=True)
+
+    return probs
 
 def dynamic_evaluate(model, test_loader, val_loader, args):
     tester = Tester(model, args)
-    if os.path.exists(os.path.join(args.save, 'logits_single.pth')): 
+    if 'PA' in args.evalmode:
+        _path = 'logits_single_PA.pth'
+        _path_txt = 'dynamic_PA.txt'
+    else:
+        _path = 'logits_single.pth'
+        _path_txt = 'dynamic.txt'
+
+
+    if os.path.exists(os.path.join(args.save, _path)): 
         val_pred, val_target, test_pred, test_target = \
-            torch.load(os.path.join(args.save, 'logits_single.pth')) 
+            torch.load(os.path.join(args.save, _path)) 
     else: 
         val_pred, val_target = tester.calc_logit(val_loader) 
         test_pred, test_target = tester.calc_logit(test_loader) 
         torch.save((val_pred, val_target, test_pred, test_target), 
-                    os.path.join(args.save, 'logits_single.pth'))
+                    os.path.join(args.save, _path))
 
     flops = torch.load(os.path.join(args.save, 'flops.pth'))
 
-    with open(os.path.join(args.save, 'dynamic.txt'), 'w') as fout:
+    with open(os.path.join(args.save, _path_txt), 'w') as fout:
         for p in range(1, 40):
             print("*********************")
             _p = torch.FloatTensor(1).fill_(p * 1.0 / 20)
@@ -40,6 +93,7 @@ class Tester(object):
         self.args = args
         self.model = model
         self.softmax = nn.Softmax(dim=1).cuda()
+        self.PA = 'PA' in args.evalmode
 
     def calc_logit(self, dataloader):
         self.model.eval()
@@ -54,9 +108,11 @@ class Tester(object):
                 if not isinstance(output, list):
                     output = [output]
                 for b in range(n_stage):
-                    _t = self.softmax(output[b])
-
-                    logits[b].append(_t) 
+                    if self.PA:
+                        logits[b].append(output[b])
+                    else:
+                        _t = self.softmax(output[b])
+                        logits[b].append(_t) 
 
             if i % self.args.print_freq == 0: 
                 print('Generate Logit: [{0}/{1}]'.format(i, len(dataloader)))
@@ -69,6 +125,9 @@ class Tester(object):
         for b in range(n_stage):
             ts_logits[b].copy_(logits[b])
 
+        if self.PA:
+            anytime_product(ts_logits, weights=(torch.arange(1, n_stage + 1, 1, dtype=float) / n_stage))
+            
         targets = torch.cat(targets, dim=0)
         ts_targets = torch.Tensor().resize_(size[1]).copy_(targets)
 
