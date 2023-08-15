@@ -126,7 +126,7 @@ class Tester(object):
             ts_logits[b].copy_(logits[b])
 
         if self.PA:
-            anytime_product(ts_logits, weights=(torch.arange(1, n_stage + 1, 1, dtype=float) / n_stage))
+            ts_logits = anytime_product(ts_logits, weights=(torch.arange(1, n_stage + 1, 1, dtype=float) / n_stage))
             
         targets = torch.cat(targets, dim=0)
         ts_targets = torch.Tensor().resize_(size[1]).copy_(targets)
