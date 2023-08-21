@@ -8,6 +8,18 @@ from collections import OrderedDict
 import random
 
 
+def get_preds_per_exit(probs: torch.Tensor):
+    L = probs.shape[0]
+    return {i: torch.argmax(probs, dim=2)[i, :] for i in range(L)}
+
+
+def get_acc_per_exit(
+    preds, targets: torch.Tensor
+):
+    L = len(preds)
+    return [(targets == preds[i]).sum() / len(targets) for i in range(L)]
+
+
 def init_model(dataset, model_folder, likelihood, epoch, model_class, exit=None, cuda=True):
     assert dataset in ["cifar10", "cifar100"]
     ARGS = parse_args()
