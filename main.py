@@ -54,8 +54,13 @@ import wandb
 import numpy as np
 
 torch.manual_seed(args.seed)
+torch.set_default_dtype(torch.float64)
 
 os.environ["WANDB_API_KEY"] = "e31842f98007cca7e04fd98359ea9bdadda29073"
+
+def assert_no_nan_no_inf(x):
+    assert not torch.isnan(x).any(), f'nan in {x}'
+    assert not torch.isinf(x).any(), f'inf in {x}'
 
 def main():
 
@@ -269,18 +274,24 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
         # noise = 3.
         # output = [x + noise for x in output]
 
-        target_var = get_temp_diff_labels(target_var, output, temp_diff)
+        # target_var = get_temp_diff_labels(target_var, output, temp_diff)
         
         loss = 0.0
         L = len(output)
         T = 1.
         for j in range(L):
             if loss_type == 'prior_networks':
-                target_alphas = targets_dir_alphas(target_var[j], num_classes, precision=precision)
+                target_alphas = targets_dir_alphas(target_var, num_classes, precision=precision)
                 # model_alphas = torch.softmax(output[j], dim=1)
-                model_alphas = torch.exp(output[j]) + 1.
-                # loss += kl_divergence(Dirichlet(target_alphas), Dirichlet(model_alphas)).mean()
-                loss += KL_dirichlet(target_alphas, model_alphas).mean()
+                model_alphas = torch.exp(torch.clamp(output[j], max=50.)) + 1.
+                # print(target_alphas.max(), model_alphas.max())
+                # model_alphas = torch.clamp(output[j], min=0.) + 1.
+                assert_no_nan_no_inf(target_alphas)
+                assert_no_nan_no_inf(model_alphas)
+                # loss_j = kl_divergence(Dirichlet(target_alphas), Dirichlet(model_alphas))
+                loss_j = KL_dirichlet(target_alphas, model_alphas)
+                assert_no_nan_no_inf(loss_j)
+                loss += loss_j.mean()
 
                 _logits = output[j]
                 
@@ -294,7 +305,7 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
             else:
                 _logits = output[j]
 
-            loss += criterion(_logits, target_var[j])
+            loss += criterion(_logits, target_var)
             
 
         losses.update(loss.item(), input.size(0))
