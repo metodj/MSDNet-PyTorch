@@ -54,7 +54,7 @@ import wandb
 import numpy as np
 
 torch.manual_seed(args.seed)
-torch.set_default_dtype(torch.float64)
+# torch.set_default_dtype(torch.float64)
 
 os.environ["WANDB_API_KEY"] = "e31842f98007cca7e04fd98359ea9bdadda29073"
 
