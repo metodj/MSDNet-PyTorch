@@ -334,3 +334,49 @@ def avcs_classification(
 
     C_arr = running_intersection_classification(C_arr)
     return C_arr
+
+
+def targets_dir_alphas(targets, C, eps=0.001, precision=1e2):
+    """
+    Convert targets to Dirichlet alphas.
+    
+    Arguments:
+    - targets: Tensor of shape (N,) containing class indices.
+    - C: Number of classes.
+    
+    Returns:
+    - Tensor of shape (N, C) with one-hot encoding.
+    """
+    one_hot = torch.zeros(targets.size(0), C, device=targets.device) + eps
+    one_hot.scatter_(1, targets.unsqueeze(1), 1 - eps * (C - 1))
+    return one_hot * precision
+
+
+def KL_dirichlet(alpha, beta):
+    """
+    KL_dirichlet(alpha, beta) calculates the Kullback-Leibler divergence
+    between two Dirichlet distributions with parameters alpha and beta
+    respectively for each sample in the batch. It is assumed that the parameters are valid, 
+    that is alpha[i] > 0 and beta[i] > 0 for all i in range(len(alpha)).
+    
+    Parameters:
+    - alpha (torch.Tensor): parameters of the first Dirichlet distribution for each sample in the batch.
+                            Shape: [batch_size, feature_dim]
+    - beta (torch.Tensor): parameters of the second Dirichlet distribution for each sample in the batch.
+                            Shape: [batch_size, feature_dim]
+
+    Returns:
+    - D (torch.Tensor): the KL divergence for each sample in the batch.
+                        Shape: [batch_size]
+    """
+    
+    # Summation along the feature dimension
+    sum_alpha = torch.sum(alpha, dim=1)
+    sum_beta = torch.sum(beta, dim=1)
+    
+    D = (torch.lgamma(sum_alpha) - torch.lgamma(sum_beta)
+         - torch.sum(torch.lgamma(alpha), dim=1)
+         + torch.sum(torch.lgamma(beta), dim=1)
+         + torch.sum((alpha - beta) * (torch.digamma(alpha) - torch.digamma(sum_alpha).unsqueeze(1)), dim=1))
+    
+    return D

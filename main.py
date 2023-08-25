@@ -18,9 +18,11 @@ import models
 from op_counter import measure_model
 from utils_poe import schedule_T, get_grad_stats, get_temp_diff_labels, ModifiedSoftmaxCrossEntropyLoss, \
                             CustomBaseCrossEntropyLoss, ModifiedSoftmaxCrossEntropyLossProd
+from utils_eenn_avcs import targets_dir_alphas, KL_dirichlet
 from utils import AverageMeter
 from torch.nn.utils import clip_grad_norm_
 import torch.nn.functional as F
+from torch.distributions import Dirichlet, kl_divergence
 
 args = arg_parser.parse_args()
 
@@ -108,6 +110,8 @@ def main():
                 criterion = CustomBaseCrossEntropyLoss().cuda()
             elif args.loss_type == 'standard':
                 criterion = nn.CrossEntropyLoss().cuda()
+            elif args.loss_type == 'prior_networks':
+                criterion = nn.CrossEntropyLoss().cuda()
             else:
                 raise ValueError()
         elif args.likelihood == 'OVR':
@@ -172,7 +176,8 @@ def main():
                                                            fun_schedule_T, args.alpha, args.ensemble_type, 
                                                            train_prec1, C_mono=args.C_mono, mono_penal=args.mono_penal, 
                                                            stop_grad=args.stop_grad, temp_diff=args.temp_diff, 
-                                                           clip_grad=args.clip_grad, loss_type=args.loss_type, start_epoch_lr=_start_epoch_lr)
+                                                           clip_grad=args.clip_grad, loss_type=args.loss_type, start_epoch_lr=_start_epoch_lr,
+                                                           precision=args.precision)
         
             run.log({'train_loss': train_loss.avg})
             run.log({'train_prec1': train_prec1[-1].avg})
@@ -222,7 +227,7 @@ def main():
 
 def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelihood, step, step_func=None, 
           alpha=0., ensemble_type="DE", train_prec1=None, C_mono=0., mono_penal=0., stop_grad=False, temp_diff=False, 
-          clip_grad=0., loss_type='standard', start_epoch_lr=None):
+          clip_grad=0., loss_type='standard', start_epoch_lr=None, precision=None):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -270,14 +275,24 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, likelih
         L = len(output)
         T = 1.
         for j in range(L):
-            if loss_type != 'relu_prod':
+            if loss_type == 'prior_networks':
+                target_alphas = targets_dir_alphas(target_var[j], num_classes, precision=precision)
+                # model_alphas = torch.softmax(output[j], dim=1)
+                model_alphas = torch.exp(output[j]) + 1.
+                # loss += kl_divergence(Dirichlet(target_alphas), Dirichlet(model_alphas)).mean()
+                loss += KL_dirichlet(target_alphas, model_alphas).mean()
+
                 _logits = output[j]
-            else:
+                
+            elif loss_type == 'relu_prod':
                 # stop_grad for previous logits
                 if stop_grad:
                     _logits = torch.stack([output[i].detach() for i in range(j)] + [output[j]], dim=0) 
                 else:
                     _logits = torch.stack(output[:j+1], dim=0) 
+
+            else:
+                _logits = output[j]
 
             loss += criterion(_logits, target_var[j])
             

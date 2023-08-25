@@ -107,7 +107,7 @@ poe_group.add_argument('--C_mono', default=0.0, type=float)
 poe_group.add_argument('--mono_penal', default=0.0, type=float)
 arch_group.add_argument('--stop_grad', default=False, type=bool)
 arch_group.add_argument('--temp_diff', default=False, type=bool)
-poe_group.add_argument('--loss_type', default='standard', type=str, choices=['standard', 'base_a', 'relu', 'relu_prod'])
+poe_group.add_argument('--loss_type', default='standard', type=str, choices=['standard', 'base_a', 'relu', 'relu_prod', 'prior_networks'])
 arch_group.add_argument('--clip_grad', default=0.0, type=float)
 # schedule T params are only relevant when OVR likelihood is used
 poe_group.add_argument('--schedule_T_type', default='sigmoid', type=str, choices=['sigmoid', 'constant'])
@@ -118,4 +118,10 @@ poe_group.add_argument('--prod_eps', default=1e-2, type=float)
 poe_group.add_argument('--prod_eps_log', default=1e-20, type=float)
 poe_group.add_argument('--prod_act_func', default='relu', type=str, choices=['relu', 'softplus'])
 poe_group.add_argument('--restart_lr', default=False, type=bool)
+
+
+# prior networks related
+pn_group = arg_parser.add_argument_group('pn',
+                                           'prior networks training')
+pn_group.add_argument('--precision', default=1e3, type=float)
 
