@@ -801,7 +801,7 @@ def get_uncertainty_with_error_bars(dataset: str, model_list):
     conf, conf_pa, conf_ca = [], [], []
     for _model, _epoch in model_list:
         if dataset != 'ImageNet':
-            logits, targets, _ = get_logits_targets(dataset, _model, 'softmax', _epoch, cuda=True)
+            logits, targets, ARGS = get_logits_targets(dataset, _model, 'softmax', _epoch, cuda=True)
         else:
             raise NotImplementedError
         
