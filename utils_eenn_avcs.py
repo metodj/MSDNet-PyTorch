@@ -33,7 +33,8 @@ def init_model(dataset, model_folder, likelihood, epoch, model_class, exit=None,
     else:
         folder_path = 'models'
     ARGS.save = (
-        f"/home/metod/Desktop/PhD/year1/PoE/MSDNet-PyTorch/{folder_path}/{model_folder}"
+        # f"/home/metod/Desktop/PhD/year1/PoE/MSDNet-PyTorch/{folder_path}/{model_folder}"
+        f"/home/mona/Desktop/MSDNet-PyTorch/{folder_path}/{model_folder}"
     )
     ARGS.arch = "msdnet"
     ARGS.batch_size = 64
