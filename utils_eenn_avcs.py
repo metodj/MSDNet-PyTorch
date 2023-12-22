@@ -51,6 +51,8 @@ def init_model(dataset, model_folder, likelihood, epoch, model_class, exit=None,
         ARGS.use_valid = True
         ARGS.splits = ["train", "val", "test"]
         ARGS.likelihood = likelihood
+    else:
+        folder_path = ""
 
     # load pre-trained model
     if model_class == MSDNet_exit:

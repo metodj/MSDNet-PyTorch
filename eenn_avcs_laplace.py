@@ -42,7 +42,7 @@ L = 5
 
 models_exit = []
 for l in range(L):
-    model_l, ARGS = init_model("ImageNet", 'image_net', 'softmax', 89, MSDNet_exit, exit=l+1, cuda=True, ARGS=ARGS)
+    model_l, ARGS = init_model("ImageNet", 'image_net', 'softmax', "089", MSDNet_exit, exit=l+1, cuda=True, ARGS=ARGS)
     models_exit.append(model_l)
 
 
@@ -115,3 +115,16 @@ print(acc)
 
 # 7) Get Credible Sets
 # TODO
+
+
+# store probs_num as pickle
+with open('probs_num.pkl', 'wb') as f:
+    pickle.dump(probs_num, f)
+
+# store probs as pickle
+with open('probs.pkl', 'wb') as f:
+    pickle.dump(probs, f)
+
+# store targets as pickle
+with open('targets.pkl', 'wb') as f:
+    pickle.dump(targets, f)
