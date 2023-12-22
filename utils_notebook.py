@@ -466,7 +466,7 @@ def get_logits_targets_image_net(step=4, model_path='image_net', model_name: Opt
     targets = []
     with torch.no_grad():
         for i, (x, y) in tqdm(enumerate(val_loader)):
-            y = y.cuda(device=None)
+            y = y.cuda()
             x = x.cuda()
 
             input_var = torch.autograd.Variable(x)

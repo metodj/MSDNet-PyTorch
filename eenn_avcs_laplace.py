@@ -42,7 +42,7 @@ L = 5
 
 models_exit = []
 for l in range(L):
-    model_l, ARGS = init_model("ImageNet", 'image_net', 'softmax', 89, MSDNet_exit, exit=l+1, cuda=True)
+    model_l, ARGS = init_model("ImageNet", 'image_net', 'softmax', 89, MSDNet_exit, exit=l+1, cuda=True, ARGS=ARGS)
     models_exit.append(model_l)
 
 
