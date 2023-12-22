@@ -391,13 +391,14 @@ def get_logits_targets(dataset, model_folder, likelihood, epoch, cuda=True, logi
     return logits, targets, ARGS
 
 
-def get_logits_targets_image_net(step=4, model_path='image_net', model_name: Optional[str]=None, n_blocks: int=5):
+def get_logits_targets_image_net(step=4, model_path='image_net', model_name: Optional[str]=None, 
+                                 n_blocks: int=5, root_path: str="/home/metod/Desktop/PhD/year1/PoE/MSDNet-PyTorch"):
     assert step in [4, 7]
     if step == 4:
         ARGS = parse_args()
         ARGS.data_root = "data"
         ARGS.data = "ImageNet"
-        ARGS.save = f"/home/metod/Desktop/PhD/year1/PoE/MSDNet-PyTorch/{model_path}"
+        ARGS.save = f"{root_path}/{model_path}"
         ARGS.arch = "msdnet"
         ARGS.batch_size = 64
         ARGS.epochs = 90
@@ -423,7 +424,7 @@ def get_logits_targets_image_net(step=4, model_path='image_net', model_name: Opt
         ARGS = parse_args()
         ARGS.data_root = "data"
         ARGS.data = "ImageNet"
-        ARGS.save = f"/home/metod/Desktop/PhD/year1/PoE/MSDNet-PyTorch/{model_path}"
+        ARGS.save = f"{root_path}/{model_path}"
         ARGS.arch = "msdnet"
         ARGS.batch_size = 64
         ARGS.epochs = 90
@@ -486,7 +487,8 @@ def get_logits_targets_image_net(step=4, model_path='image_net', model_name: Opt
 
 def get_image_net_val_loader(ARGS):
 
-    DATA_PATH = "data/image_net/valid/"
+    # DATA_PATH = "data/image_net/valid/"
+    DATA_PATH = "/ssdstore/ImageNet/val/"
 
     normalize = transforms.Normalize(
         mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
