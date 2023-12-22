@@ -23,32 +23,34 @@ def get_acc_per_exit(
     return [(targets == preds[i]).sum() / len(targets) for i in range(L)]
 
 
-def init_model(dataset, model_folder, likelihood, epoch, model_class, exit=None, cuda=True):
-    assert dataset in ["cifar10", "cifar100"]
-    ARGS = parse_args()
-    ARGS.data_root = "data"
-    ARGS.data = dataset
-    if dataset == "cifar10":
-        folder_path = 'models_cifar_10'
-    else:
-        folder_path = 'models'
-    ARGS.save = (
-        # f"/home/metod/Desktop/PhD/year1/PoE/MSDNet-PyTorch/{folder_path}/{model_folder}"
-        f"/home/mona/Desktop/MSDNet-PyTorch/{folder_path}/{model_folder}"
-    )
-    ARGS.arch = "msdnet"
-    ARGS.batch_size = 64
-    ARGS.epochs = 300
-    ARGS.nBlocks = 7
-    ARGS.stepmode = "even"
-    ARGS.base = 4
-    ARGS.nChannels = 16
-    ARGS.j = 16
-    ARGS.num_classes = 100 if dataset == "cifar100" else 10
-    ARGS.step = 2
-    ARGS.use_valid = True
-    ARGS.splits = ["train", "val", "test"]
-    ARGS.likelihood = likelihood
+def init_model(dataset, model_folder, likelihood, epoch, model_class, exit=None, cuda=True, ARGS=None):
+    assert dataset in ["cifar10", "cifar100", "ImageNet"]
+    if ARGS is None:
+        assert dataset in ["cifar10", "cifar100"]
+        ARGS = parse_args()
+        ARGS.data_root = "data"
+        ARGS.data = dataset
+        if dataset == "cifar10":
+            folder_path = 'models_cifar_10'
+        else:
+            folder_path = 'models'
+        ARGS.save = (
+            # f"/home/metod/Desktop/PhD/year1/PoE/MSDNet-PyTorch/{folder_path}/{model_folder}"
+            f"/home/mona/Desktop/MSDNet-PyTorch/{folder_path}/{model_folder}"
+        )
+        ARGS.arch = "msdnet"
+        ARGS.batch_size = 64
+        ARGS.epochs = 300
+        ARGS.nBlocks = 7
+        ARGS.stepmode = "even"
+        ARGS.base = 4
+        ARGS.nChannels = 16
+        ARGS.j = 16
+        ARGS.num_classes = 100 if dataset == "cifar100" else 10
+        ARGS.step = 2
+        ARGS.use_valid = True
+        ARGS.splits = ["train", "val", "test"]
+        ARGS.likelihood = likelihood
 
     # load pre-trained model
     if model_class == MSDNet_exit:
