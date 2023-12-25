@@ -38,7 +38,7 @@ acc = get_acc_per_exit(preds, targets)
 print('Accs: ', acc)
 
 # 2) Initialize Laplace
-L = 5
+L = 1
 
 models_exit = []
 for l in range(L):
@@ -51,7 +51,7 @@ for l in range(L):
 val_loader = get_image_net_val_loader(ARGS)
 
 N_all = len(val_loader.dataset)
-N = 5000
+N = 10000
 
 subset1 = random.sample(range(N_all), N)
 subset2 = random.sample([i for i in range(N_all) if i not in subset1], N)
@@ -65,21 +65,36 @@ print(len(val_loader), len(subset1_loader), len(subset2_loader))
 
 
 # 4) Optimize prior precision
-# TODO
+# LAs = []
+# for l in range(L):
+#     la = Laplace(models_exit[l], 'classification', subset_of_weights='last_layer', hessian_structure='kron')
+#     la.fit(subset1_loader)
+
+#     log_prior = torch.ones(1, requires_grad=True)
+#     hyper_optimizer = torch.optim.Adam([log_prior], lr=1e-1)
+#     for i in range(100):
+#         hyper_optimizer.zero_grad()
+#         neg_marglik = - la.log_marginal_likelihood(log_prior.exp())
+#         neg_marglik.backward()
+#         hyper_optimizer.step()
+#         if i % 10 == 0:
+#             print(f"Epoch {i} | neg_marglik: {neg_marglik.item():.4f}")
+            
+#     LAs.append(la)
 
 # 5) Fit Laplace
 LAs = []
 for l in range(L):
     print("Fitting Laplace: ", l)
-    la = Laplace(models_exit[l], 'classification', subset_of_weights='last_layer', hessian_structure='full')
-    la.fit(subset1_loader)
+    la = Laplace(models_exit[l], 'classification', subset_of_weights='last_layer', hessian_structure='diag')
     # la.prior_precision = LAs_prior_precision[l]
+    la.fit(subset1_loader)
     LAs.append(la)
 
 
 # 6) Get Laplace predictions
-pred_type='glm'
-# pred_type='nn'
+# pred_type='glm'
+pred_type='nn'
 link_approx='mc'
 # link_approx='bridge_norm'
 n_samples_num=10
