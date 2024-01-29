@@ -1,3 +1,5 @@
+# Update on model locations on Uva-Desktop [Jan 2024]
+Models and ImageNet dataset moved to `/mnt/hdd/msdnet-models`
 # MSDNet-PyTorch
 
 This repository contains the PyTorch implementation of the paper [Multi-Scale Dense Networks for Resource Efficient Image Classification](https://arxiv.org/pdf/1703.09844.pdf)
@@ -24,6 +26,7 @@ pip install -r requirements.txt
 + PyTorch >= 0.4.0
 
 ## Network Configurations
+
 
 #### Train an MSDNet (block=7) on CIFAR-100 for *anytime prediction*: 
 
