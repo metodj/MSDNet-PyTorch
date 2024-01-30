@@ -2,6 +2,7 @@ import torch.nn as nn
 import torch
 import math
 import pdb
+import time
 
 class ConvBasic(nn.Module):
     def __init__(self, nIn, nOut, kernel=3, stride=1,
@@ -336,8 +337,17 @@ class MSDNet(nn.Module):
     def forward(self, x):
         res = []
         for i in range(self.nBlocks):
+            start_time = time.time()
+
+            start_time_1 = time.time()
             x = self.blocks[i](x)
+            print("Block {} time: {}".format(i + 1, time.time() - start_time_1))
+
+            start_time_2 = time.time()
             res.append(self.classifier[i](x))
+            print("EE-head {} time: {}".format(i + 1, time.time() - start_time_2))
+
+            print("Exit {} time: {}".format(i + 1, time.time() - start_time))
         return res
 
 

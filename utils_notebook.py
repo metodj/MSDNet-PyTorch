@@ -15,6 +15,8 @@ from collections import OrderedDict, Counter
 from sklearn.linear_model import LogisticRegression
 from netcal.metrics import ECE, ACE
 import random
+import time
+from torchsummaryX import summary
 
 
 # TODO: most of the functions below have an ugly implementation with for loops, vectorize them
@@ -314,21 +316,23 @@ def f_probs_pa_softplus(logits, weights=None, break_ties=False, beta=1.):
     return probs
 
 
-def get_logits_targets(dataset, model_folder, likelihood, epoch, cuda=True, logits_type: str = 'test'):
+def get_logits_targets(dataset, model_folder, likelihood, epoch, cuda=True, logits_type: str = 'test', 
+                       model_root: str = 'mnt/hdd/msdnet_models'):
     assert dataset in ["cifar10", "cifar100"]
     assert logits_type in ['train', 'test', 'val']
     ARGS = parse_args()
     ARGS.data_root = "data"
     ARGS.data = dataset
     if dataset == "cifar10":
-        folder_path = 'models_cifar_10'
+        # folder_path = 'models_cifar_10'
+        folder_path = 'models'
     else:
         folder_path = 'models'
     ARGS.save = (
-        f"/home/metod/Desktop/PhD/year1/PoE/MSDNet-PyTorch/{folder_path}/{model_folder}"
+        f"{folder_path}/{model_folder}"
     )
     ARGS.arch = "msdnet"
-    ARGS.batch_size = 64
+    ARGS.batch_size = 100
     ARGS.epochs = 300
     ARGS.nBlocks = 7
     ARGS.stepmode = "even"
@@ -357,6 +361,9 @@ def get_logits_targets(dataset, model_folder, likelihood, epoch, cuda=True, logi
         model = model.cuda()
     model.eval()
 
+    arch = summary(model, torch.rand((1, 3, 32, 32)).to('cuda' if cuda else 'cpu'))
+    print(arch)
+
     # data
     if logits_type == 'test':
         _, _, _loader = get_dataloaders(ARGS)
@@ -378,7 +385,11 @@ def get_logits_targets(dataset, model_folder, likelihood, epoch, cuda=True, logi
             input_var = torch.autograd.Variable(x)
             target_var = torch.autograd.Variable(y)
 
+
+            start_time = time.time()
             output = model(input_var)
+            print(f'Forward pass took {time.time() - start_time} seconds')
+            print(output[0].shape, len(output))
             if not isinstance(output, list):
                 output = [output]
 
