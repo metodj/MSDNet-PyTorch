@@ -55,12 +55,15 @@ def anytime_product(
 
 def dynamic_evaluate(model, test_loader, val_loader, args):
     tester = Tester(model, args)
-    if 'PA' in args.evalmode:
-        _path = 'logits_single_PA.pth'
-        _path_txt = 'dynamic_PA.txt'
-    else:
-        _path = 'logits_single.pth'
-        _path_txt = 'dynamic.txt'
+    # if 'PA' in args.evalmode:
+    #     _path = 'logits_single_PA.pth'
+    #     _path_txt = 'dynamic_PA.txt'
+    # else:
+    #     _path = 'logits_single.pth'
+    #     _path_txt = 'dynamic.txt'
+    
+    _path = 'logits_single.pth'
+    _path_txt = 'dynamic.txt'
 
 
     if os.path.exists(os.path.join(args.save, _path)): 
@@ -74,6 +77,7 @@ def dynamic_evaluate(model, test_loader, val_loader, args):
 
     flops = torch.load(os.path.join(args.save, 'flops.pth'))
 
+    T_all, acc_all = [], []
     with open(os.path.join(args.save, _path_txt), 'w') as fout:
         for p in range(1, 40):
             print("*********************")
@@ -82,10 +86,14 @@ def dynamic_evaluate(model, test_loader, val_loader, args):
             probs /= probs.sum()
             acc_val, _, T = tester.dynamic_eval_find_threshold(
                 val_pred, val_target, probs, flops)
+            print(T)
+            T_all.append(T)
+            acc_all.append(acc_all)
             acc_test, exp_flops = tester.dynamic_eval_with_threshold(
                 test_pred, test_target, flops, T)
             print('valid acc: {:.3f}, test acc: {:.3f}, test flops: {:.2f}M'.format(acc_val, acc_test, exp_flops / 1e6))
-            fout.write('{}\t{}\n'.format(acc_test, exp_flops.item()))
+            # fout.write('{}\t{}\n'.format(acc_test, exp_flops.item()))
+    return T_all, acc_all
 
 
 class Tester(object):
@@ -93,7 +101,8 @@ class Tester(object):
         self.args = args
         self.model = model
         self.softmax = nn.Softmax(dim=1).cuda()
-        self.PA = 'PA' in args.evalmode
+        # self.PA = 'PA' in args.evalmode
+        self.PA = False
 
     def calc_logit(self, dataloader):
         self.model.eval()
@@ -147,7 +156,8 @@ class Tester(object):
         _, sorted_idx = max_preds.sort(dim=1, descending=True)
 
         filtered = torch.zeros(n_sample)
-        T = torch.Tensor(n_stage).fill_(1e8)
+        # T = torch.Tensor(n_stage).fill_(1e8)
+        T = torch.Tensor(n_stage).fill_(1.)
 
         for k in range(n_stage - 1):
             acc, count = 0.0, 0
@@ -161,7 +171,8 @@ class Tester(object):
                         break
             filtered.add_(max_preds[k].ge(T[k]).type_as(filtered))
 
-        T[n_stage -1] = -1e8 # accept all of the samples at the last stage
+        # T[n_stage -1] = -1e8 # accept all of the samples at the last stage
+        T[n_stage -1] = 0.
 
         acc_rec, exp = torch.zeros(n_stage), torch.zeros(n_stage)
         acc, expected_flops = 0, 0
